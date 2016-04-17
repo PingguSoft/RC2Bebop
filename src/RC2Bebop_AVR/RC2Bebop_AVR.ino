@@ -35,12 +35,20 @@ enum {
 
 #define PIN_LED1    A0
 #define PIN_LED2    A1
+#define PIN_LED3    A2
 
 #define FW_VERSION  0x0120
 
 static SerialProtocol  mSerial;
 static RCRcvr *mRcvr = NULL;
 
+
+static void showLED(u8 color)
+{
+    digitalWrite(PIN_LED1, color & 0x01);
+    digitalWrite(PIN_LED2, color & 0x02);
+    digitalWrite(PIN_LED3, color & 0x04);
+}
 
 static void initReceiver(void)
 {
@@ -75,11 +83,7 @@ u32 serialCallback(u8 cmd, u8 *data, u8 size)
             break;
 
         case SerialProtocol::CMD_SET_STATE:
-            if (*data >= STATE_CONFIG) {
-                digitalWrite(PIN_LED1, HIGH);
-            } else {
-                digitalWrite(PIN_LED1, LOW);
-            }
+            showLED(*data);
             break;
     }
     return ret;
@@ -89,8 +93,10 @@ void setup()
 {
     pinMode(PIN_LED1, OUTPUT);
     pinMode(PIN_LED2, OUTPUT);
+    pinMode(PIN_LED3, OUTPUT);
     digitalWrite(PIN_LED1, LOW);
     digitalWrite(PIN_LED2, LOW);
+    digitalWrite(PIN_LED3, LOW);
 
     mSerial.begin(57600);
     mSerial.setCallback(serialCallback);
