@@ -18,7 +18,7 @@
 void SerialProtocol::putChar2TX(u8 data)
 {
     chkSumTX ^= data;
-    Serial.write(data);
+//    Serial.write(data);
 }
 
 SerialProtocol::SerialProtocol()

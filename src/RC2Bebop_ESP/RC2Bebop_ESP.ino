@@ -55,7 +55,7 @@ static s8 aux2 = 0;
 static s8 aux3 = 0;
 static s8 aux4 = 0;
 
-
+#if 0
 void handleKey(void)
 {
     int size;
@@ -126,6 +126,7 @@ void handleKey(void)
         flag = 1;
     mControl.move(flag, roll, pitch, yaw, speed);
 }
+#endif
 
 void scanAndConnect(void)
 {
@@ -203,8 +204,7 @@ u32 serialCallback(u8 cmd, u8 *data, u8 size)
             aux3  = map((s16)bb.get16());
             aux4  = map((s16)bb.get16());
 
-//            Utils::printf("%3d %3d %3d %3d %3d %3d %3d %3d\n", speed, yaw, pitch, roll, aux1, aux2, aux3, aux4);
-#if 1
+#if 0
             if (aux1 >= 50)
                 mControl.takeOff();
             else if (aux1 < 50)
@@ -220,22 +220,64 @@ u32 serialCallback(u8 cmd, u8 *data, u8 size)
     return ret;
 }
 
+
+IPAddress apIP(192, 168, 70, 1);
+
+
+
 void setup() {
     Serial.begin(57600);
 
-    WiFi.mode(WIFI_STA);
-    WiFi.disconnect();
-    delay(100);
+//    WiFi.mode(WIFI_STA);
+//    WiFi.disconnect();
+//    delay(100);
 
-    Utils::printf("Ready !!!\n");
+    Utils::printf("Ready !!! : %08x\n", ESP.getChipId());
     mSerial.setCallback(serialCallback);
+
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.softAP("BebopDrone-E035114");
+    WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
+    delay(100);
 }
+
+void testServer(void)
+{
+    if (mServer.hasClient()) {
+        if (!mServerClient || !mServerClient.connected()) {
+            if (mServerClient)
+                mServerClient.stop();
+
+            mServerClient = mServer.available();
+            Utils::printf("New Client !!\n");
+        }
+    }
+
+    if (mServerClient && mServerClient.connected()) {
+        while (mServerClient.available()) {
+            Serial.write(mServerClient.read());
+        }
+    }
+}
+
+bool serverStarted = false;
+WiFiServer  mServer(12345);
+WiFiClient  mServerClient;
 
 void loop()
 {
     u8  size;
 
-#if 1
+    if (!serverStarted) {
+        mServer.begin();
+        serverStarted = true;
+    }
+
+    if (serverStarted) {
+        testServer();
+    }
+
+#if 0
     switch (mNextState) {
         case STATE_INIT:
             scanAndConnect();
@@ -265,7 +307,6 @@ void loop()
             mControl.process(dataAck, size);
             break;
     }
-//    handleKey();
     mSerial.handleRX();
 #endif
 }
