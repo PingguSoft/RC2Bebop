@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include <stdarg.h>
 #include <ESP8266WiFi.h>
-#include <DNSServer.h>
+#include <ESP8266mDNS.h>
 #include "Commands.h"
 #include "Receiver.h"
 #include "ByteBuffer.h"
@@ -226,13 +226,14 @@ u32 serialCallback(u8 cmd, u8 *data, u8 size)
 }
 
 
-IPAddress apIP(192, 168, 42, 1);
+IPAddress   apIP(192, 168, 42, 1);
+WiFiUDP     mUDP;
+bool        serverStarted = false;
+WiFiServer  mServer(44444);
+WiFiClient  mServerClient;
+u8          mac[20];
 
-//const byte DNS_PORT = 53;
-//DNSServer dnsServer;
-WiFiUDP mUDP;
 
-u8 mac[20];
 
 void setup() {
     Serial.begin(57600);
@@ -244,7 +245,7 @@ void setup() {
     Utils::printf("\n\nReady !!! : %08x\n", ESP.getChipId());
     mSerial.setCallback(serialCallback);
 
-    WiFi.mode(WIFI_AP_STA);
+    WiFi.mode(WIFI_AP);
     WiFi.softAP("BebopDrone-E035114");
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
 
@@ -255,6 +256,9 @@ void setup() {
     wifi_get_macaddr(1, mac);
     Utils::printf("AP_MAC :%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
+    delay(500);
+
+#if 0
     mac[0] = 0x02;
     mac[1] = 0xAE;
     mac[2] = 0x5E;
@@ -263,21 +267,35 @@ void setup() {
     mac[5] = 0x14;
     wifi_set_macaddr(1, mac);
     Utils::printf("AP_MAC :%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-    
-    delay(100);    
-}
+#endif
 
-bool serverStarted = false;
-WiFiServer  mServer(44444);
-WiFiClient  mServerClient;
+    if (!MDNS.begin("arsdk-090c")) {
+        Serial.println("Error setting up MDNS responder!");
+        for(;;);
+    } else {
+//        MDNS.addServiceTxt("arsdk-0901", "udp" ,"device_id", "PI040339AG5E035114");
+//        MDNS.addService("arsdk-0901", "udp", 44444);
+
+        MDNS.setInstanceName("BebopDrone-E035114");
+        MDNS.addServiceTxt("arsdk-090c", "udp" ,"device_id", "PI040339AG5E035114");
+        MDNS.addService("arsdk-090c", "udp", 44444);
+
+
+        Utils::printf("mDNS started !!!\n");
+    }
+
+    delay(100);
+}
 
 void testServer(void)
 {
+/*
     int cb = mUDP.parsePacket();
     if (cb > 0) {
         mUDP.read(dataAck, cb);
         Utils::dump(dataAck, cb);
     }
+*/
 
     if (mServer.hasClient()) {
         if (!mServerClient || !mServerClient.connected()) {
@@ -303,12 +321,8 @@ void loop()
     u8  size;
 
     if (!serverStarted) {
-//        dnsServer.setTTL(300);
-//        dnsServer.setErrorReplyCode(DNSReplyCode::ServerFailure);
-//        dnsServer.start(DNS_PORT, "www.parrot.com", apIP);
+//        mUDP.begin(53);
 
-        mUDP.begin(53);
-        
         mServer.begin();
         serverStarted = true;
     }
