@@ -1,10 +1,15 @@
 #include <Arduino.h>
 #include <stdarg.h>
 #include <ESP8266WiFi.h>
+#include <DNSServer.h>
 #include "Commands.h"
 #include "Receiver.h"
 #include "ByteBuffer.h"
 #include "SerialProtocol.h"
+
+extern "C" {
+#include "user_interface.h"
+}
 
 enum {
     STATE_INIT = 0,
@@ -221,9 +226,13 @@ u32 serialCallback(u8 cmd, u8 *data, u8 size)
 }
 
 
-IPAddress apIP(192, 168, 70, 1);
+IPAddress apIP(192, 168, 42, 1);
 
+//const byte DNS_PORT = 53;
+//DNSServer dnsServer;
+WiFiUDP mUDP;
 
+u8 mac[20];
 
 void setup() {
     Serial.begin(57600);
@@ -232,17 +241,44 @@ void setup() {
 //    WiFi.disconnect();
 //    delay(100);
 
-    Utils::printf("Ready !!! : %08x\n", ESP.getChipId());
+    Utils::printf("\n\nReady !!! : %08x\n", ESP.getChipId());
     mSerial.setCallback(serialCallback);
 
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP("BebopDrone-E035114");
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-    delay(100);
+
+
+    wifi_get_macaddr(0, mac);
+    Utils::printf("STA_MAC:%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    wifi_get_macaddr(1, mac);
+    Utils::printf("AP_MAC :%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+    mac[0] = 0x02;
+    mac[1] = 0xAE;
+    mac[2] = 0x5E;
+    mac[3] = 0x03;
+    mac[4] = 0x51;
+    mac[5] = 0x14;
+    wifi_set_macaddr(1, mac);
+    Utils::printf("AP_MAC :%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    
+    delay(100);    
 }
+
+bool serverStarted = false;
+WiFiServer  mServer(44444);
+WiFiClient  mServerClient;
 
 void testServer(void)
 {
+    int cb = mUDP.parsePacket();
+    if (cb > 0) {
+        mUDP.read(dataAck, cb);
+        Utils::dump(dataAck, cb);
+    }
+
     if (mServer.hasClient()) {
         if (!mServerClient || !mServerClient.connected()) {
             if (mServerClient)
@@ -258,17 +294,21 @@ void testServer(void)
             Serial.write(mServerClient.read());
         }
     }
-}
 
-bool serverStarted = false;
-WiFiServer  mServer(12345);
-WiFiClient  mServerClient;
+//    dnsServer.processNextRequest();
+}
 
 void loop()
 {
     u8  size;
 
     if (!serverStarted) {
+//        dnsServer.setTTL(300);
+//        dnsServer.setErrorReplyCode(DNSReplyCode::ServerFailure);
+//        dnsServer.start(DNS_PORT, "www.parrot.com", apIP);
+
+        mUDP.begin(53);
+        
         mServer.begin();
         serverStarted = true;
     }
