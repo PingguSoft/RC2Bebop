@@ -328,7 +328,6 @@ bool app_handleDiscovery(void)
                 mAppDiscoveryClient.stop();
 
             mAppDiscoveryClient = mAppDiscoveryServer.available();
-            Utils::printf("New Client !!\n");
         }
     }
 

@@ -94,6 +94,15 @@ int BridgeServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
     u16         cmd;
     int         len = 0;
 
+    if (mBypass) {
+        if (mHostPort != 0) {
+            sendto(mBuffer, mPayloadLen);
+        } else {
+            Utils::printf("HOST PORT IS ZERO !!!\n");
+        }
+        return mPayloadLen;;
+    }
+
     switch (mFrameType) {
         case FRAME_TYPE_ACK:
             if (mPayloadLen == 8 && mFrameID == 0x8b) {
@@ -356,17 +365,7 @@ int BridgeServer::process(u8 *dataAck)
     int size = 0;
 
     cb = mUDPServer.available();
-    
-    if (mBypass) {
-        if (mHostPort != 0) {
-            mUDPServer.read(mBuffer, cb);
-            sendto(mBuffer, cb);
-        } else {
-            Utils::printf("HOST PORT IS ZERO !!!\n");
-        }
-        return cb;
-    }
-
+   
     while (cb > 0) {
         switch (mNextState) {
             case STATE_HEADER:
