@@ -15,36 +15,78 @@
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
-#include "Receiver.h"
+#include "BridgeServer.h"
 #include "Utils.h"
 #include "ByteBuffer.h"
 
-Receiver::Receiver(int port)
+BridgeServer::BridgeServer(char *name, int portServer)
 {
-    mPort       = port;
+    mName       = name;
+    mServerPort = portServer;
     mNextState  = STATE_HEADER;
     mPayloadLen = 0;
-    mBodyLen    = 0;
+    mHostPort   = 0;
+    mBypass     = false;
 }
 
-Receiver::~Receiver()
+BridgeServer::~BridgeServer()
 {
-    mUDP.stop();
+    mUDPServer.stop();
 }
 
-int Receiver::recv(u8 *data, int size)
+int BridgeServer::recv(u8 *data, int size)
 {
-    int cb = mUDP.parsePacket();
-    if (!cb || mUDP.available() < size)
+    int cb = mUDPServer.parsePacket();
+    if (!cb || mUDPServer.available() < size)
         return 0;
 
-    return mUDP.read(data, size);
+    return mUDPServer.read(data, size);
+}
+
+void BridgeServer::sendto(u8 *data, int size)
+{
+    //Utils::printf("<<< TX : %s to (%s:%d)\n", 
+    //    mName, mHostIP.toString().c_str(), mHostPort);
+    if (mHostIP[0] == 0) {
+        Utils::printf("<<< TX ERROR : no dest\n");
+        return;
+    }
+
+    mUDPHost.beginPacket(mHostIP, mHostPort);
+    mUDPHost.write(data, size);
+    mUDPHost.endPacket();
 }
 
 //    0          1       2      3 4 5 6       7
 // frametype, frameid, seqid, payloadlen+7    payload
 
-int Receiver::parseFrame(u8 *data, u32 size, u8 *dataAck)
+#if 0
+int BridgeServer::parseFrame(u8 *data, u32 size)
+{
+    ByteBuffer   ba(data, size);
+    u32         cmdID;
+
+    switch (mFrameType) {
+        case FRAME_TYPE_DATA:
+            if (mFrameID == 0x10) {
+                cmdID = PACK_CMD(ba.get8(), ba.get8(), ba.get16());
+                if (cmdID == PACK_CMD(PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 2)) {
+                    Utils::dump(data, size);
+                }
+            }
+            break;
+    }
+
+    if (mHostPort != 0)
+        sendto(mBuffer, mPayloadLen);
+    return size;
+}
+#endif
+
+//    0          1       2      3 4 5 6       7
+// frametype, frameid, seqid, payloadlen+7    payload
+
+int BridgeServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 {
     ByteBuffer   ba(data, size);
     char        buf[32];
@@ -282,53 +324,93 @@ int Receiver::parseFrame(u8 *data, u32 size, u8 *dataAck)
     return len;
 }
 
-
-void Receiver::begin(void)
+int BridgeServer::kick(void)
 {
-    mUDP.begin(mPort);
-    Utils::printf("Local port : %d\n", mUDP.localPort());
+    long ts = millis();
+    int  diff = ts - mLastTS;
+    int  size = 0;
+
+    if (diff >= 25) {
+        u8  flag = 0;
+        u32 tsPCMD = (mPCMDSeq++ << 24) | (millis() & 0x00ffffff);
+        u8  buf[40];
+
+        size = Bebop::buildCmd(buf, FRAME_TYPE_DATA, 10, "BBHBbbbbI", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 2,
+            flag, 0, 0, 0, 0, tsPCMD);
+        sendto(buf, size);
+        mLastTS = ts;
+    }
+    return size;
 }
 
-int Receiver::process(u8 *dataAck)
+void BridgeServer::begin(void)
 {
-    int cb = mUDP.parsePacket();
+    mUDPServer.begin(mServerPort);
+    Utils::printf("%s port : %d\n", mName, mUDPServer.localPort());
+}
+
+int BridgeServer::process(u8 *dataAck)
+{
+    int cb = mUDPServer.parsePacket();
     int len = 0;
+    int size = 0;
 
-    switch (mNextState) {
-        case STATE_HEADER:
-        {
-            if (!cb || mUDP.available() < HEADER_LEN)
-                return len;
-
-            mUDP.read(mHeader, HEADER_LEN);
-            u8 *data = mHeader;
-
-            //Utils::printf("-------------------------RX START ---------------------\n");
-            //Utils::dump(data, HEADER_LEN);
-
-            ByteBuffer   ba(data, HEADER_LEN);
-            mFrameType  = ba.get8();
-            mFrameID    = ba.get8();
-            mFrameSeqID = ba.get8();
-            mPayloadLen = ba.get32();
-            mBodyLen    = mPayloadLen - HEADER_LEN;
-            mNextState = STATE_BODY;
+    cb = mUDPServer.available();
+    
+    if (mBypass) {
+        if (mHostPort != 0) {
+            mUDPServer.read(mBuffer, cb);
+            sendto(mBuffer, cb);
+        } else {
+            Utils::printf("HOST PORT IS ZERO !!!\n");
         }
-
-        case STATE_BODY:
-        {
-            if (mUDP.available() < mPayloadLen - HEADER_LEN)
-                return len;
-
-            mUDP.read(mBody, mBodyLen);
-            //Utils::dump(mBody, mPayloadLen - HEADER_LEN);
-            len = parseFrame(mBody, mBodyLen, dataAck);
-            //Utils::printf("-------------------------RX END -----------------------\n\n");
-
-            mNextState = STATE_HEADER;
-        }
-        break;
+        return cb;
     }
 
-    return len;
+    while (cb > 0) {
+        switch (mNextState) {
+            case STATE_HEADER:
+            {
+                if (cb < HEADER_LEN)
+                    return size;
+
+                mUDPServer.read(mBuffer, HEADER_LEN);
+                u8 *data = mBuffer;
+
+                //Utils::printf(">>> RX START : %s from (%s:%d)\n", 
+                //    mName, mUDPServer.remoteIP().toString().c_str(), mUDPServer.remotePort());
+                //Utils::dump(data, HEADER_LEN);
+
+                ByteBuffer   ba(data, HEADER_LEN);
+                mFrameType  = ba.get8();
+                mFrameID    = ba.get8();
+                mFrameSeqID = ba.get8();
+                mPayloadLen = ba.get32();
+                mNextState = STATE_BODY;
+                cb -= HEADER_LEN;
+            }
+            // no break
+
+            case STATE_BODY:
+            {
+                u32 bodylen = mPayloadLen - HEADER_LEN;
+                
+                if (cb < bodylen)
+                    return len;
+
+                mUDPServer.read(&mBuffer[HEADER_LEN], bodylen);
+                //Utils::dump(&mBuffer[HEADER_LEN], bodylen);
+                len = parseFrame(&mBuffer[HEADER_LEN], bodylen, dataAck);
+                dataAck += len;
+                size    += len;
+                //Utils::printf("-------------------------RX END  : %s-----------------------\n\n", mName);
+
+                mNextState = STATE_HEADER;
+                cb -= bodylen;
+            }
+            break;
+        }
+    }
+
+    return size;
 }

@@ -3,9 +3,10 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include "Commands.h"
-#include "Receiver.h"
+#include "CmdServer.h"
 #include "ByteBuffer.h"
 #include "SerialProtocol.h"
+#include "BridgeServer.h"
 
 extern "C" {
 #include "user_interface.h"
@@ -20,13 +21,23 @@ enum {
     STATE_WORK,
 };
 
-static char *HOST = "192.168.42.1";
+#define DISCOVERY_PORT      44444
+#define BRG_CMD_SERVER_PORT 51000
+#define BRG_NAV_SERVER_PORT 52000
 
 static SerialProtocol   mSerial;
-static WiFiClient       mClient;
-static Commands         mControl(HOST, 54321);
-static Receiver         mNavData(43210);
+static WiFiClient       mBebopDiscoveryClient;
+
 static u8               mNextState = STATE_INIT;
+static char             mStrDiscovery2App[200];
+
+static BridgeServer     mCmdBridge("CMD_BRG", BRG_CMD_SERVER_PORT);
+static BridgeServer     mNavBridge("NAV_BRG", BRG_NAV_SERVER_PORT);
+
+static u8          mac[20];
+static WiFiServer  mAppDiscoveryServer(DISCOVERY_PORT);
+static WiFiClient  mAppDiscoveryClient;
+
 
 void WiFiEvent(WiFiEvent_t event) {
     Utils::printf("[WiFi-event] event: %d\n", event);
@@ -49,7 +60,7 @@ void WiFiEvent(WiFiEvent_t event) {
 }
 
 
-static u8 dataAck[1024];
+static u8 dataAck[4096];
 static u8 recVideo = 0;
 static s8 speed = 0;
 static s8 roll = 0;
@@ -133,7 +144,7 @@ void handleKey(void)
 }
 #endif
 
-void scanAndConnect(void)
+bool bebop_scanAndConnect(void)
 {
     int n = WiFi.scanNetworks();
 
@@ -146,45 +157,75 @@ void scanAndConnect(void)
             if (!strncmp(WiFi.SSID(i).c_str(), "BebopDrone", 10)) {
                 WiFi.onEvent(WiFiEvent);
                 WiFi.begin(WiFi.SSID(i).c_str(), "");
-                mNextState = STATE_AP_CONNECT;
                 Utils::printf("Connect to BebopDrone !!!\n");
                 mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
-                break;
+                return true;
             }
         }
     }
+    return false;
 }
 
-void connectDiscovery(void)
+bool bebop_connectDiscovery(void)
 {
-    Utils::printf("Connect to discovery socket !!!\n");
+    IPAddress hostIP = WiFi.localIP();
+    hostIP[3] = 1;
 
-    if (!mClient.connect(HOST, 44444)) {
+    WiFi.removeEvent(WiFiEvent);
+    Utils::printf("bebop_connectDiscovery : %s, %d\n", hostIP.toString().c_str(), DISCOVERY_PORT);
+    if (!mBebopDiscoveryClient.connect(hostIP, DISCOVERY_PORT)) {
         Utils::printf("Connection Failed !!!\n");
     } else {
-        char *req = "{\"controller_type\":\"computer\", \"controller_name\":\"UniConTX\", \"d2c_port\":\"43210\"}";
-        mClient.print(req);
-        mClient.flush();
-        mNextState = STATE_DISCOVERY_ACK;
+        char req[200];
+        sprintf(req,"{\"d2c_port\":%d, \"controller_name\":\"UniConTX\", \"controller_type\":\"computer\"}", BRG_NAV_SERVER_PORT);
+        Utils::printf("to bebop : %s\n", req);
+        mBebopDiscoveryClient.print(req);
+        mBebopDiscoveryClient.flush();
         mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
+        return true;
     }
+
+    return false;
 }
 
-void handleDiscovery(void)
+bool bebop_handleDiscovery(void)
 {
-    u8  buf[256];
+    u8      buf[256];
+    char    sv[20];
 
     Utils::printf("Waiting response !!!\n");
-    while (mClient.available()) {
-        int len = mClient.read(buf, 256);
+    while (mBebopDiscoveryClient.available()) {
+        int len = mBebopDiscoveryClient.read(buf, 256);
         if (len > 0) {
             Utils::printf("%d %s\n", len, (char*)buf);
-            mNavData.begin();
-            mNextState = STATE_CONFIG;
+            //{ "status": 0, "c2d_port": 54321, "arstream_fragment_size": 65000, "arstream_fragment_maximum_number": 4, "arstream_max_ack_interval": -1, "c2d_update_port": 51, "c2d_user_port": 21 }            
+
+            char *ptr = strstr((char*)buf, "\"c2d_port\":");
+            if (ptr) {
+                ptr += strlen("\"c2d_port\":");
+                char *comma = strstr(ptr, ",");
+                char szPort[20];
+                
+                strncpy(szPort, ptr, comma - ptr);
+                szPort[comma - ptr] = 0;
+                int port = atoi(szPort);
+                Utils::printf("dev command (c2d_port):%d !!\n", port);
+                mCmdBridge.setHost(mBebopDiscoveryClient.remoteIP(), port);
+
+                memset(mStrDiscovery2App, 0, sizeof(mStrDiscovery2App));
+                strncpy(mStrDiscovery2App, (char*)buf, ptr - (char*)&buf[0]);
+                strcat(mStrDiscovery2App, itoa(BRG_CMD_SERVER_PORT, sv, 10));
+                strcat(mStrDiscovery2App, comma);
+                Utils::printf("prepare App discovery msg (c2d_port):%s !!\n", mStrDiscovery2App);
+                mBebopDiscoveryClient.stop();
+            }
             mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
+            return true;
         }
-        //{ "status": 0, "c2d_port": 54321, "arstream_fragment_size": 65000, "arstream_fragment_maximum_number": 4, "arstream_max_ack_interval": -1, "c2d_update_port": 51, "c2d_user_port": 21 }
+        
     }
+
+    return false;
 }
 
 s16 map(s16 v)
@@ -225,38 +266,27 @@ u32 serialCallback(u8 cmd, u8 *data, u8 size)
     return ret;
 }
 
-
-IPAddress   apIP(192, 168, 42, 1);
-WiFiUDP     mUDP;
-bool        serverStarted = false;
-WiFiServer  mServer(44444);
-WiFiClient  mServerClient;
-u8          mac[20];
-
-
-
-void setup() {
-    Serial.begin(57600);
-
-//    WiFi.mode(WIFI_STA);
-//    WiFi.disconnect();
-//    delay(100);
+void setupNetwork(void)
+{
+    IPAddress   apIP(192, 168, 77, 1);
+    
+    sprintf(mStrDiscovery2App, 
+        "{ \"status\": 0, \"c2d_port\": %d, \"arstream_fragment_size\": 65000, \"arstream_fragment_maximum_number\": 4, \"arstream_max_ack_interval\": -1, \"c2d_update_port\": 51, \"c2d_user_port\": 21 }", 
+        BRG_CMD_SERVER_PORT);
 
     Utils::printf("\n\nReady !!! : %08x\n", ESP.getChipId());
     mSerial.setCallback(serialCallback);
 
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP("BebopDrone-E035114");
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.softAP("BebopDrone-Bridge");
     WiFi.softAPConfig(apIP, apIP, IPAddress(255, 255, 255, 0));
-
+    delay(500);
 
     wifi_get_macaddr(0, mac);
     Utils::printf("STA_MAC:%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 
     wifi_get_macaddr(1, mac);
     Utils::printf("AP_MAC :%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-    delay(500);
 
 #if 0
     mac[0] = 0x02;
@@ -269,99 +299,127 @@ void setup() {
     Utils::printf("AP_MAC :%02X:%02X:%02X:%02X:%02X:%02X\n", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 #endif
 
-    if (!MDNS.begin("arsdk-090c")) {
+    if (!MDNS.begin("arsdk-0901")) {
         Serial.println("Error setting up MDNS responder!");
         for(;;);
     } else {
-//        MDNS.addServiceTxt("arsdk-0901", "udp" ,"device_id", "PI040339AG5E035114");
-//        MDNS.addService("arsdk-0901", "udp", 44444);
-
         MDNS.setInstanceName("BebopDrone-E035114");
-        MDNS.addServiceTxt("arsdk-090c", "udp" ,"device_id", "PI040339AG5E035114");
-        MDNS.addService("arsdk-090c", "udp", 44444);
-
+        MDNS.addService("arsdk-0901", "udp", DISCOVERY_PORT);
+        MDNS.addServiceTxt("arsdk-0901", "udp" ,"{\"device_id\":\"PI040339AG5E035114\"}", " ");
 
         Utils::printf("mDNS started !!!\n");
+        delay(100);
     }
-
-    delay(100);
 }
 
-void testServer(void)
+void setup() {
+    Serial.begin(57600);
+    setupNetwork();
+}
+
+bool app_handleDiscovery(void)
 {
-/*
-    int cb = mUDP.parsePacket();
-    if (cb > 0) {
-        mUDP.read(dataAck, cb);
-        Utils::dump(dataAck, cb);
-    }
-*/
+    u8      buf[256];
+    char    sv[20];
+    
+    if (mAppDiscoveryServer.hasClient()) {
+        if (!mAppDiscoveryClient || !mAppDiscoveryClient.connected()) {
+            if (mAppDiscoveryClient)
+                mAppDiscoveryClient.stop();
 
-    if (mServer.hasClient()) {
-        if (!mServerClient || !mServerClient.connected()) {
-            if (mServerClient)
-                mServerClient.stop();
-
-            mServerClient = mServer.available();
+            mAppDiscoveryClient = mAppDiscoveryServer.available();
             Utils::printf("New Client !!\n");
         }
     }
 
-    if (mServerClient && mServerClient.connected()) {
-        while (mServerClient.available()) {
-            Serial.write(mServerClient.read());
+    if (mAppDiscoveryClient && mAppDiscoveryClient.connected()) {
+        mAppDiscoveryClient.read(buf, mAppDiscoveryClient.available());
+        char *ptr = strstr((char*)buf, "\"d2c_port\":");
+        if (ptr) {
+            ptr += strlen("\"d2c_port\":");
+            char *comma = strstr(ptr, ",");
+            char szPort[20];
+            
+            strncpy(szPort, ptr, comma - ptr);
+            szPort[comma - ptr] = 0;
+            int port = atoi(szPort);
+
+            mNavBridge.setHost(mAppDiscoveryClient.remoteIP(), port);
+            Utils::printf("app nav port (d2c_port):%d  %s!!\n", port, mStrDiscovery2App);
+            mAppDiscoveryClient.print(mStrDiscovery2App);
+            return true;
         }
     }
-
-//    dnsServer.processNextRequest();
+    return false;
 }
 
 void loop()
 {
-    u8  size;
+    int  size;
 
-    if (!serverStarted) {
-//        mUDP.begin(53);
-
-        mServer.begin();
-        serverStarted = true;
-    }
-
-    if (serverStarted) {
-        testServer();
-    }
-
-#if 0
     switch (mNextState) {
         case STATE_INIT:
-            scanAndConnect();
+            if (bebop_scanAndConnect())
+                mNextState = STATE_AP_CONNECT;
             break;
 
         case STATE_DISCOVERY:
-            connectDiscovery();
+            if (bebop_connectDiscovery()) {
+                mNextState = STATE_DISCOVERY_ACK;
+            }
             break;
 
         case STATE_DISCOVERY_ACK:
-            handleDiscovery();
+            if (bebop_handleDiscovery()) {
+                mAppDiscoveryServer.begin();
+
+                mNavBridge.begin();
+                mNavBridge.setBypass(false);
+                mCmdBridge.begin();
+                mCmdBridge.setBypass(false);
+                
+                mNextState = STATE_CONFIG;
+            }
             break;
 
+        case STATE_CONFIG:
+            if (app_handleDiscovery()) {
+                mCmdBridge.setBypass(true);
+                mNavBridge.setBypass(true);
+                mNextState = STATE_WORK;
+            }
+
+            size = mNavBridge.process(dataAck);
+            if (size > 0) {
+                mCmdBridge.sendto(dataAck, size);
+            }
+            mCmdBridge.kick();
+            
+            break;
+
+        case STATE_WORK:
+            mCmdBridge.process(dataAck);
+            mNavBridge.process(dataAck);
+            break;
+
+#if 0
         case STATE_CONFIG:
             if (mControl.config()) {
                 mNextState = STATE_WORK;
                 mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
             }
 
-            size = mNavData.process(dataAck);
+            size = mNavBridge.process(dataAck);
             if (size > 0)
                 mControl.process(dataAck, size);
             break;
 
         case STATE_WORK:
-            size = mNavData.process(dataAck);
+            size = mNavBridge.process(dataAck);
             mControl.process(dataAck, size);
             break;
+#endif            
     }
     mSerial.handleRX();
-#endif
 }
 

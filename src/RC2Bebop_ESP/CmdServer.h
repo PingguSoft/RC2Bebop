@@ -11,8 +11,8 @@
  see <http://www.gnu.org/licenses/>
 */
 
-#ifndef _RECEIVER_H_
-#define _RECEIVER_H_
+#ifndef _CMD_SERVER_H_
+#define _CMD_SERVER_H_
 
 #include <WiFiUdp.h>
 #include "Common.h"
@@ -25,7 +25,7 @@
 // https://github.com/Parrot-Developers/libARCommands/blob/master/Xml/ARDrone3_commands.xml
 
 
-class Receiver
+class CmdServer
 {
 public:
     enum {
@@ -33,19 +33,20 @@ public:
         STATE_BODY   = 1,
     };
 
-
-    Receiver(int port);
-    ~Receiver();
+    CmdServer(int port);
+    ~CmdServer();
 
     int recv(u8 *data, int size);
     void begin(void);
-    int  process(u8 *dataAck);
+    int  process(void);
+    u8   *getData(void)     { return mBuffer;       }
+    u32  getDataSize(void)  { return mPayloadLen;   }
 // datetime.datetime.now().date().isoformat()                ==> '2016-04-15'              V
 // datetime.datetime.now().time().isoformat()                ==> '18:55:34.756000'
 // datetime.datetime.now().time().strftime("T%H%M%S+0000")   ==> 'T185603+0000'            V
 
 private:
-    int parseFrame(u8 *data, u32 size, u8 *dataAck);
+    int parseFrame(u8 *data, u32 size);
 
 
     WiFiUDP mUDP;
@@ -53,17 +54,13 @@ private:
     u8  *mStrHost;
     int mPort;
 
-    u8  mHeader[10];
-    u8  mBody[1024];
+    u8  mBuffer[1124];
     u8  mNextState;
 
     u8  mFrameType;
     u8  mFrameID;
     u8  mFrameSeqID;
     u32 mPayloadLen;
-    u32 mBodyLen;
-
-    u16 mVidFrameNo;
 };
 
 #endif

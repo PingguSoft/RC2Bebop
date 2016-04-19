@@ -32,6 +32,7 @@ class Commands
 public:
     Commands(char *host, int port);
     ~Commands();
+    void setPort(int port);
     void sendto(u8 *data, int size);
 
     void takeOff(void);

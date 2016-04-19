@@ -31,6 +31,11 @@ Commands::~Commands()
     mUDP.stop();
 }
 
+void Commands::setPort(int port)
+{
+    mPort = port;
+}
+
 void Commands::sendto(u8 *data, int size)
 {
     mUDP.beginPacket(mStrHost, mPort);
