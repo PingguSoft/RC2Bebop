@@ -57,6 +57,11 @@ static const char *TBL_HREASONS[] = {"userRequest", "connectionLost", "lowBatter
 static const char *TBL_VSTATES[]  = {"stopped", "started", "failed", "autostopped"};
 static const char *TBL_VSSTATES[] = {"enabled", "disabled", "error"};
 
+int NavServer::preProcess(u8 *data, u32 size, u8 *dataAck)
+{
+    return 0;
+}
+
 int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 {
     ByteBuffer   ba(data, size);
