@@ -45,7 +45,7 @@ public:
     u8   *getData(void)     { return mBuffer;       }
     u32  getDataSize(void)  { return mPayloadLen;   }
 
-    virtual int preProcess(u8 *data, u32 size, u8 *dataAck) = 0;
+    virtual int preProcess(u8 *data, u32 size, u8 *dataAck);
 
 protected:
     int parseFrame(u8 *data, u32 size, u8 *dataAck);
