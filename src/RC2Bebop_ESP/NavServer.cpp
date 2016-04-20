@@ -65,6 +65,10 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
     u16         cmd;
     int         len = 0;
 
+    len = preProcess(data, size, dataAck);
+    if (len < 0)
+        return -len;
+
     switch (mFrameType) {
         case FRAME_TYPE_ACK:
             if (mPayloadLen == 8 && mFrameID == 0x8b) {
