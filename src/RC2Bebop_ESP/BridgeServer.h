@@ -17,7 +17,7 @@
 #include <WiFiUdp.h>
 #include "Common.h"
 #include "Bebop.h"
-#include "NavServr.h"
+#include "NavServer.h"
 
 #define HEADER_LEN  7
 
@@ -32,10 +32,11 @@ public:
     BridgeServer(char *name, int port);
     ~BridgeServer();
 
-    void setHost(IPAddress hostIP, int hostport)    { mHostIP = hostIP; mHostPort = hostport; }
+    void setDest(IPAddress hostIP, int hostport)    { mHostIP = hostIP; mHostPort = hostport; }
     void setBypass(bool bypass)                     { mBypass = bypass; }
     void sendto(u8 *data, int size);                // send to host ip/port
     int  kick(void);
+    virtual int preProcess(u8 *data, u32 size, u8 *dataAck);
     
 private:
     char *mName;
@@ -44,6 +45,8 @@ private:
     IPAddress mHostIP;  // TX only
     int     mHostPort;
     bool    mBypass;
+    u8      mPCMDSeq;
+    u32     mLastTS;
 };
 
 #endif

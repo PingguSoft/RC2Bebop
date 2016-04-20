@@ -47,13 +47,10 @@ public:
 
     virtual int preProcess(u8 *data, u32 size, u8 *dataAck) = 0;
 
-private:
+protected:
     int parseFrame(u8 *data, u32 size, u8 *dataAck);
 
-
     WiFiUDP mUDP;
-
-    u8  *mStrHost;
     int mPort;
 
     u8  mBuffer[1124];

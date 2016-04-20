@@ -210,7 +210,7 @@ bool bebop_handleDiscovery(void)
                 szPort[comma - ptr] = 0;
                 int port = atoi(szPort);
                 Utils::printf("dev command (c2d_port):%d !!\n", port);
-                mCmdBridge.setHost(mBebopDiscoveryClient.remoteIP(), port);
+                mCmdBridge.setDest(mBebopDiscoveryClient.remoteIP(), port);
 
                 memset(mStrDiscovery2App, 0, sizeof(mStrDiscovery2App));
                 strncpy(mStrDiscovery2App, (char*)buf, ptr - (char*)&buf[0]);
@@ -343,7 +343,7 @@ bool app_handleDiscovery(void)
             szPort[comma - ptr] = 0;
             int port = atoi(szPort);
 
-            mNavBridge.setHost(mAppDiscoveryClient.remoteIP(), port);
+            mNavBridge.setDest(mAppDiscoveryClient.remoteIP(), port);
             Utils::printf("app nav port (d2c_port):%d  %s!!\n", port, mStrDiscovery2App);
             mAppDiscoveryClient.print(mStrDiscovery2App);
             return true;
