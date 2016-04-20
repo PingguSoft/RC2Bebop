@@ -38,15 +38,14 @@ public:
     NavServer(int port);
     ~NavServer();
 
-    void setPort(int port) { mPort = port; }
-    int recv(u8 *data, int size);
-    void begin(void);
-    int  process(u8 *dataAck);
-    u8   *getData(void)     { return mBuffer;       }
-    u32  getDataSize(void)  { return mPayloadLen;   }
-// datetime.datetime.now().date().isoformat()                ==> '2016-04-15'              V
-// datetime.datetime.now().time().isoformat()                ==> '18:55:34.756000'
-// datetime.datetime.now().time().strftime("T%H%M%S+0000")   ==> 'T185603+0000'            V
+    void    setPort(int port) { mPort = port; }
+    int     recv(u8 *data, int size);
+    void    begin(void);
+    int     process(u8 *dataAck);
+    u8      *getData(void)     { return mBuffer;       }
+    u32     getDataSize(void)  { return mPayloadLen;   }
+
+    virtual int preProcess(u8 *data, u32 size, u8 *dataAck) = 0;
 
 private:
     int parseFrame(u8 *data, u32 size, u8 *dataAck);

@@ -18,10 +18,9 @@
 #include "Utils.h"
 #include "ByteBuffer.h"
 
-Commands::Commands(char *host, int port)
+Commands::Commands()
 {
-    mStrHost = host;
-    mPort    = port;
+    mPort    = 0;
     mCfgIdx  = 0;
     mPCMDSeq = 0;
 }
@@ -31,14 +30,13 @@ Commands::~Commands()
     mUDP.stop();
 }
 
-void Commands::setPort(int port)
-{
-    mPort = port;
-}
-
 void Commands::sendto(u8 *data, int size)
 {
-    mUDP.beginPacket(mStrHost, mPort);
+    if (mDestIP[0] == 0 || mPort == 0) {
+        Utils::printf("NO DEST IP or Port\n");
+}
+
+    mUDP.beginPacket(mDestIP, mPort);
     mUDP.write(data, size);
     mUDP.endPacket();
 
@@ -83,14 +81,14 @@ void Commands::recordVideo(u8 enable, u8 storage)
 void Commands::setDate(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 1, "2016-04-16");
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 1, "2016-04-20");
     sendto(mBuf, size);
 }
 
 void Commands::setTime(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 2, "T185603+0000");
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 2, "T152803+0000");
     sendto(mBuf, size);
 }
 
@@ -111,21 +109,21 @@ void Commands::moveCamera(s8 tilt, s8 pan)
 void Commands::takeOff(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 1);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 1);
     sendto(mBuf, size);
 }
 
 void Commands::land(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 3);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 3);
     sendto(mBuf, size);
 }
 
 void Commands::emergency(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 4);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 4);
     sendto(mBuf, size);
 }
 
@@ -139,21 +137,21 @@ void Commands::trim(void)
 void Commands::requestSettings(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBH", PROJECT_COMMON, COMMON_CLASS_SETTINGS, 0);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_COMMON, COMMON_CLASS_SETTINGS, 0);
     sendto(mBuf, size);
 }
 
 void Commands::requestStates(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBH", PROJECT_COMMON, COMMON_CLASS_COMMON, 0);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_COMMON, COMMON_CLASS_COMMON, 0);
     sendto(mBuf, size);
 }
 
 void Commands::resetHome(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_GPSSETTINGS, 1);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_GPSSETTINGS, 1);
     sendto(mBuf, size);
 }
 
@@ -170,7 +168,7 @@ bool Commands::config(void)
             case 2: requestStates();    break;
             case 3: requestSettings();  break;
             case 4: moveCamera(0, 0);   break;
-            case 5: enableVideoAutoRecording(0); break;
+            case 5: enableVideoAutoRecording(1);    break;
             case 6: enableVideoStreaming(0);
                 done = true;
                 break;

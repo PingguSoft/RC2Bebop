@@ -17,6 +17,7 @@
 #include <WiFiUdp.h>
 #include "Common.h"
 #include "Bebop.h"
+#include "NavServr.h"
 
 #define HEADER_LEN  7
 
@@ -25,52 +26,24 @@
 // https://github.com/Parrot-Developers/libARCommands/blob/master/Xml/ARDrone3_commands.xml
 
 
-class BridgeServer
+class BridgeServer : public NavServer
 {
 public:
-    enum {
-        STATE_HEADER = 0,
-        STATE_BODY   = 1,
-    };
-
     BridgeServer(char *name, int port);
     ~BridgeServer();
 
     void setHost(IPAddress hostIP, int hostport)    { mHostIP = hostIP; mHostPort = hostport; }
     void setBypass(bool bypass)                     { mBypass = bypass; }
-    
     void sendto(u8 *data, int size);                // send to host ip/port
-    int  recv(u8 *data, int size);                  // receive from server ip/port
-    
-    void begin(void);
-    int  process(u8 *dataAck);
-    u8   *getData(void)     { return mBuffer;       }
-    u32  getDataSize(void)  { return mPayloadLen;   }
     int  kick(void);
     
 private:
-    int parseFrame(u8 *data, u32 size, u8 *dataAck);
-
     char *mName;
-    WiFiUDP mUDPServer; // RX only
-    int mServerPort;    // RX only
 
     WiFiUDP mUDPHost;   // TX only
     IPAddress mHostIP;  // TX only
-    int mHostPort;
-
-    u8  mBuffer[1124];
-    u8  mNextState;
-
-    bool mBypass;
-    u8  mFrameType;
-    u8  mFrameID;
-    u8  mFrameSeqID;
-    u32 mPayloadLen;
-
-    u8  mPCMDSeq;
-    u16 mVidFrameNo;
-    u32 mLastTS;
+    int     mHostPort;
+    bool    mBypass;
 };
 
 #endif

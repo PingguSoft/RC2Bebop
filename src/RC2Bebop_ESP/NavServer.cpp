@@ -50,6 +50,13 @@ int NavServer::recv(u8 *data, int size)
 //    0          1       2      3 4 5 6       7
 // frametype, frameid, seqid, payloadlen+7    payload
 
+static const char *TBL_FSTATES[]  = {"landed", "takingoff", "hovering", "flying", "landing", "emergency"};
+static const char *TBL_ASTATES[]  = {"none/No alert", "user/User emergency alert", "cut_out/Cut out alert", "critical_battery", "low_battery", "too_much_angle"};
+static const char *TBL_HSTATES[]  = {"available", "inProgress", "unavailable", "pending", "low_battery", "too_much_angle"};
+static const char *TBL_HREASONS[] = {"userRequest", "connectionLost", "lowBattery", "finished", "stopped", "disabled", "enabled"};
+static const char *TBL_VSTATES[]  = {"stopped", "started", "failed", "autostopped"};
+static const char *TBL_VSSTATES[] = {"enabled", "disabled", "error"};
+
 int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 {
     ByteBuffer   ba(data, size);
@@ -57,6 +64,10 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
     u32         cmdID;
     u16         cmd;
     int         len = 0;
+
+    len = preProcess(data, size, dataAck);
+    if (len < 0)
+        return -len;
 
     switch (mFrameType) {
         case FRAME_TYPE_ACK:
@@ -109,6 +120,8 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 
             if (cmdID == PACK_CMD(PROJECT_COMMON, COMMON_CLASS_COMMONSTATE, 7)) {
                 Utils::printf(">> RSSI         : %5d\n", ba.get16());
+            } else if (cmdID == PACK_CMD(PROJECT_ARDRONE3, ARDRONE3_CLASS_CAMERASTATE, 0)) {
+                Utils::printf(">> CAM          : %d %d\n", ba.get8(), ba.get8());
             } else if (GET_PRJ_CLS(cmdID) == PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTINGSTATE)) {
                 switch(cmd) {
                     case 4:
@@ -130,8 +143,6 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                         Utils::printf(">> ALT          : %s\n", Utils::dtoa(buf, ba.getdouble()));
                         break;
                 }
-            } else if (cmdID == PACK_CMD(PROJECT_ARDRONE3, ARDRONE3_CLASS_CAMERASTATE, 0)) {
-                Utils::printf(">> CAM          : %d %d\n", ba.get8(), ba.get8());
             } else {
                 Utils::printf(">> UNKNOWN      : %08x\n", cmdID);
             }
@@ -143,32 +154,53 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 
             switch(GET_PRJ_CLS(cmdID)) {
                 case PACK_PRJ_CLS(PROJECT_COMMON, COMMON_CLASS_SETTINGSSTATE):
-                    if (cmd == 0) {
-                        Utils::printf(">> All Settings - Done\n");
-                    } else if (cmd == 2) {
-                        Utils::printf(">> Product Name : %s\n", ba.getstr());
-                    } else if (cmd == 3) {
-                        Utils::printf(">> Product Ver  : %s\n", ba.getstr());
-                    } else if (cmd == 4) {
-                        Utils::printf(">> Product SerH : %s\n", ba.getstr());
-                    } else if (cmd == 5) {
-                        Utils::printf(">> Product SerL : %s\n", ba.getstr());
-                    } else if (cmd == 6) {
-                        Utils::printf(">> Country      : %s\n", ba.getstr());
-                    } else if (cmd == 7) {
-                        Utils::printf(">> AutoCountry  : %s\n", ba.getstr());
-                    } else {
-                        Utils::printf(">> UNKNOWN      : %08x\n", cmdID);
+                    switch (cmd) {
+                        case 0:
+                            Utils::printf(">> All Settings - Done\n");
+                            break;
+                            
+                        case 2:
+                            Utils::printf(">> Product Name : %s\n", ba.getstr());
+                            break;
+
+                        case 3:
+                            Utils::printf(">> Product Ver  : %s\n", ba.getstr());
+                            break;
+
+                        case 4:
+                            Utils::printf(">> Product SerH : %s\n", ba.getstr());
+                            break;
+
+                        case 5:
+                            Utils::printf(">> Product SerL : %s\n", ba.getstr());
+                            break;
+                            
+                        case 6:
+                            Utils::printf(">> Country      : %s\n", ba.getstr());
+                            break;
+
+                        case 7:
+                            Utils::printf(">> AutoCountry  : %s\n", ba.getstr());
+                            break;
+
+                        default:
+                            Utils::printf(">> UNKNOWN      : %08x\n", cmdID);
                     }
                     break;
 
                 case PACK_PRJ_CLS(PROJECT_COMMON, COMMON_CLASS_COMMONSTATE):
-                    if (cmd == 1) {
-                        Utils::printf(">> Battery      : %d\n", ba.get8());
-                    } else if (cmd == 4) {
-                        Utils::printf(">> Date         : %s\n", ba.getstr());
-                    } else if (cmd == 5) {
-                        Utils::printf(">> Time         : %s\n", ba.getstr());
+                    switch (cmd) {
+                        case 1:
+                            Utils::printf(">> Battery      : %d\n", ba.get8());
+                            break;
+                            
+                        case 2:
+                            Utils::printf(">> Date         : %s\n", ba.getstr());
+                            break;
+                            
+                        case 5:
+                            Utils::printf(">> Time         : %s\n", ba.getstr());
+                            break;
                     }
                     break;
 
@@ -179,55 +211,82 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                     break;
 
                 case PACK_PRJ_CLS(PROJECT_COMMON, COMMON_CLASS_CALIBRATIONSTATE):
-                    if (cmd == 0) {
-                        Utils::printf(">> Mag Cal      : %d %d %d %d\n", ba.get8(), ba.get8(), ba.get8(), ba.get8());
-                    } else if (cmd == 1) {
-                        Utils::printf(">> Mag Cal Req  : %d\n", ba.get8());
-                    } else if (cmd == 3) {
-                        Utils::printf(">> Mag Cal Start: %d\n", ba.get8());
-                    } else {
-                        Utils::printf(">> Calibration  : %d\n", cmd);
+                    switch (cmd) {
+                        case 0:
+                            Utils::printf(">> Mag Cal      : %d %d %d %d\n", ba.get8(), ba.get8(), ba.get8(), ba.get8());
+                            break;
+
+                        case 1:
+                            Utils::printf(">> Mag Cal Req  : %d\n", ba.get8());
+                            break;
+                            
+                        case 3:
+                            Utils::printf(">> Mag Cal Start: %d\n", ba.get8());
+                            break;
+
+                        default:
+                            Utils::printf(">> Calibration  : %d\n", cmd);
+                            break;
                     }
                     break;
 
                 case PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTINGSTATE):
-                    if (cmd == 0) {
-                        Utils::printf(">> FlatTrim Done:\n");
-                    } else if (cmd == 1) {
-                        const char *states[] = {"landed", "takingoff", "hovering", "flying", "landing", "emergency"};
-                        Utils::printf(">> Flying State : %s\n", states[ba.get32()]);
-                    } else if (cmd == 2) {
-                        const char *states[] = {"none/No alert", "user/User emergency alert", "cut_out/Cut out alert", "critical_battery", "low_battery", "too_much_angle"};
-                        Utils::printf(">> Alert  State : %s\n", states[ba.get32()]);
-                    } else if (cmd == 3) {
-                        const char *states[]  = {"available", "inProgress", "unavailable", "pending", "low_battery", "too_much_angle"};
-                        const char *reasons[] = {"userRequest", "connectionLost", "lowBattery", "finished", "stopped", "disabled", "enabled"};
-                        Utils::printf(">> Navigate Home: %s, %s\n", states[ba.get32()], reasons[ba.get32()]);
-                    } else {
-                        Utils::printf(">> UNKNOWN PILOT: %08x\n", cmdID);
+                    switch (cmd) {
+                        case 0:
+                            Utils::printf(">> FlatTrim Done:\n");
+                            break;
+
+                        case 1:
+                            Utils::printf(">> Flying State : %s\n", TBL_FSTATES[ba.get32()]);
+                            break;
+
+                        case 2:
+                            Utils::printf(">> Alert  State : %s\n", TBL_ASTATES[ba.get32()]);
+                        break;
+
+                        case 3:
+                            Utils::printf(">> Navigate Home: %s, %s\n", TBL_HSTATES[ba.get32()], TBL_HREASONS[ba.get32()]);
+                            break;
+
+                        default:
+                            Utils::printf(">> UNKNOWN PILOT: %08x\n", cmdID);
+                            break;
                     }
                     break;
 
                 case PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTINGSETTINGSSTATE):
-                    if (cmd == 0) {
-                        Utils::printf(">> Max Alt      : %f %f %f\n", ba.getfloat(), ba.getfloat(), ba.getfloat());
-                    } else if (cmd == 1) {
-                        Utils::printf(">> Max Tilt     : %f %f %f\n", ba.getfloat(), ba.getfloat(), ba.getfloat());
-                    } else if (cmd == 2) {
-                        Utils::printf(">> Absolute Ctrl: %d\n", ba.get8());
-                    } else {
-                        Utils::printf(">> UNKNOWN PILOT: %08x\n", cmdID);
+                    switch (cmd) {
+                        case 0:
+                            Utils::printf(">> Max Alt      : %f %f %f\n", ba.getfloat(), ba.getfloat(), ba.getfloat());
+                            break;
+                            
+                        case 1:
+                            Utils::printf(">> Max Tilt     : %f %f %f\n", ba.getfloat(), ba.getfloat(), ba.getfloat());
+                            break;
+
+                        case 2:
+                            Utils::printf(">> Absolute Ctrl: %d\n", ba.get8());
+                            break;
+
+                        default:
+                            Utils::printf(">> UNKNOWN PILOT: %08x\n", cmdID);
+                            break;
                     }
                     break;
 
                 case PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_MEDIARECORDSTATE):
-                    if (cmd == 0) {
-                        Utils::printf(">> Pictue State : %d %d\n", ba.get8(), ba.get8());
-                    } else if (cmd == 1) {
-                        const char *states[] = {"stopped", "started", "failed", "autostopped"};
-                        Utils::printf(">> Video  State : %s %d\n", states[ba.get32()], ba.get8());
-                    } else {
-                        Utils::printf(">> UNKNOWN MEDIA: %08x\n", cmdID);
+                    switch (cmd) {
+                        case 0:
+                            Utils::printf(">> Pictue State : %d %d\n", ba.get8(), ba.get8());
+                            break;
+                            
+                        case 1:
+                            Utils::printf(">> Video  State : %s %d\n", TBL_VSTATES[ba.get32()], ba.get8());
+                            break;
+
+                        default:
+                            Utils::printf(">> UNKNOWN MEDIA: %08x\n", cmdID);
+                            break;
                     }
                     break;
 
@@ -236,12 +295,18 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                     break;
 
                 case PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_SETTINGSSTATE):
-                    if (cmd == 4) {
-                        Utils::printf(">> Motor Flight : %d %d %d\n", ba.get16(), ba.get16(), ba.get32());
-                    } else if (cmd == 5) {
-                        Utils::printf(">> Motor LastErr: %d\n", ba.get32());
-                    } else {
-                        Utils::printf(">> Setting State: %08x\n", cmdID);
+                    switch (cmd) {
+                        case 4:
+                            Utils::printf(">> Motor Flight : %d %d %d\n", ba.get16(), ba.get16(), ba.get32());
+                            break;
+                        
+                        case 5:
+                            Utils::printf(">> Motor LastErr: %d\n", ba.get32());
+                            break;
+
+                        default:
+                            Utils::printf(">> Setting State: %08x\n", cmdID);
+                            break;
                     }
                     break;
 
@@ -253,16 +318,19 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 
                 case PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_MEDIASTREAMINGSTATE):
                     if (cmd == 0) {
-                        const char *states[] = {"enabled", "disabled", "error"};
-                        Utils::printf(">> VideoStm Stat: %s\n", states[ba.get32()]);
+                        Utils::printf(">> VideoStm Stat: %s\n", TBL_VSSTATES[ba.get32()]);
                     }
                     break;
 
                 case PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_GPSSETTINGSSTATE):
-                    if (cmd == 0) {
-                        Utils::printf(">> Home Changed : %f %f\n", ba.getdouble(), ba.getdouble());
-                    } else if (cmd == 2) {
-                        Utils::printf(">> GPS Fix stat : %d\n", ba.get8());
+                    switch (cmd) {
+                        case 0:
+                            Utils::printf(">> Home Changed : %f %f\n", ba.getdouble(), ba.getdouble());
+                            break;
+
+                        case 2:
+                            Utils::printf(">> GPS Fix stat : %d\n", ba.get8());
+                            break;
                     }
                     break;
 
@@ -317,7 +385,7 @@ int NavServer::process(u8 *dataAck)
                 mUDP.read(mBuffer, HEADER_LEN);
                 u8 *data = mBuffer;
 
-                //Utils::printf("-------------------------RX START ---------------------\n");
+                //Utils::printf(">> RX --- \n");
                 //Utils::dump(data, HEADER_LEN);
 
                 ByteBuffer   ba(data, HEADER_LEN);
@@ -342,10 +410,9 @@ int NavServer::process(u8 *dataAck)
                 len = parseFrame(&mBuffer[HEADER_LEN], bodylen, dataAck);
                 dataAck += len;
                 size    += len;
-                    //Utils::printf("-------------------------RX END  : %s-----------------------\n\n", mName);
 
                 mNextState = STATE_HEADER;
-                    cb -= bodylen;
+                cb -= bodylen;
             }
             break;
         }
