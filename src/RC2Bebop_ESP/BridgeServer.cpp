@@ -112,7 +112,7 @@ int BridgeServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
             return len;
 
         case FRAME_TYPE_DATA_LOW_LATENCY:
-            if (mPayloadLen >= 12 && mFrameID == 0x7d) {
+            if (mPayloadLen >= 12 && mFrameID == BUFFER_ID_D2C_VID) {
                 u16 frameNo      = ba.get16();
                 u8  frameFlags   = ba.get8();
                 u8  fragNo       = ba.get8();
@@ -138,7 +138,7 @@ int BridgeServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 
         case FRAME_TYPE_DATA_WITH_ACK:
             Utils::printf(">> ACK REQUIRED : %d %d %d\n", mFrameType, mFrameID, mFrameSeqID);
-            len = Bebop::buildCmd(dataAck, FRAME_TYPE_ACK, 0xFE, "B", mFrameSeqID);
+            len = Bebop::buildCmd(dataAck, FRAME_TYPE_ACK, 0x80 | mFrameID, "B", mFrameSeqID);
             return len;
     }
 
@@ -148,7 +148,7 @@ int BridgeServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
             len = Bebop::buildCmd(dataAck, FRAME_TYPE_DATA, BUFFER_ID_PONG, "P", size, data);
             break;
 
-        case 0x7f:
+        case BUFFER_ID_D2C_RPT:
             cmdID = PACK_CMD(ba.get8(), ba.get8(), ba.get16());
             cmd   = GET_CMD(cmdID);
 
@@ -182,7 +182,7 @@ int BridgeServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
             }
             break;
 
-        case 0x7e:
+        case BUFFER_ID_D2C_ACK_SETTINGS:
             cmdID = PACK_CMD(ba.get8(), ba.get8(), ba.get16());
             cmd   = GET_CMD(cmdID);
 
@@ -344,7 +344,7 @@ int BridgeServer::kick(void)
         u32 tsPCMD = (mPCMDSeq++ << 24) | (millis() & 0x00ffffff);
         u8  buf[40];
 
-        size = Bebop::buildCmd(buf, FRAME_TYPE_DATA, 10, "BBHBbbbbI", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 2,
+        size = Bebop::buildCmd(buf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBHBbbbbI", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 2,
             flag, 0, 0, 0, 0, tsPCMD);
         sendto(buf, size);
         mLastTS = ts;

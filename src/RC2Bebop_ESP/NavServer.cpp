@@ -67,7 +67,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
             return len;
 
         case FRAME_TYPE_DATA_LOW_LATENCY:
-            if (mPayloadLen >= 12 && mFrameID == 0x7d) {
+            if (mPayloadLen >= 12 && mFrameID == BUFFER_ID_D2C_VID) {
                 u16 frameNo      = ba.get16();
                 u8  frameFlags   = ba.get8();
                 u8  fragNo       = ba.get8();
@@ -93,7 +93,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 
         case FRAME_TYPE_DATA_WITH_ACK:
             Utils::printf(">> ACK REQUIRED : %d %d %d\n", mFrameType, mFrameID, mFrameSeqID);
-            len = Bebop::buildCmd(dataAck, FRAME_TYPE_ACK, 0xFE, "B", mFrameSeqID);
+            len = Bebop::buildCmd(dataAck, FRAME_TYPE_ACK, 0x80 | mFrameID, "B", mFrameSeqID);
             return len;
     }
 
@@ -103,7 +103,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
             len = Bebop::buildCmd(dataAck, FRAME_TYPE_DATA, BUFFER_ID_PONG, "P", size, data);
             break;
 
-        case 0x7f:
+        case BUFFER_ID_D2C_RPT:
             cmdID = PACK_CMD(ba.get8(), ba.get8(), ba.get16());
             cmd   = GET_CMD(cmdID);
 
@@ -137,7 +137,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
             }
             break;
 
-        case 0x7e:
+        case BUFFER_ID_D2C_ACK_SETTINGS:
             cmdID = PACK_CMD(ba.get8(), ba.get8(), ba.get16());
             cmd   = GET_CMD(cmdID);
 
@@ -303,43 +303,53 @@ int NavServer::process(u8 *dataAck)
 {
     int cb = mUDP.parsePacket();
     int len = 0;
+    int size = 0;
 
-    switch (mNextState) {
-        case STATE_HEADER:
-        {
-            if (!cb || mUDP.available() < HEADER_LEN)
-                return len;
+    cb = mUDP.available();
+   
+    while (cb > 0) {
+        switch (mNextState) {
+            case STATE_HEADER:
+            {
+                if (cb < HEADER_LEN)
+                    return size;
 
-            mUDP.read(mBuffer, HEADER_LEN);
-            u8 *data = mBuffer;
+                mUDP.read(mBuffer, HEADER_LEN);
+                u8 *data = mBuffer;
 
-            //Utils::printf("-------------------------RX START ---------------------\n");
-            //Utils::dump(data, HEADER_LEN);
+                //Utils::printf("-------------------------RX START ---------------------\n");
+                //Utils::dump(data, HEADER_LEN);
 
-            ByteBuffer   ba(data, HEADER_LEN);
-            mFrameType  = ba.get8();
-            mFrameID    = ba.get8();
-            mFrameSeqID = ba.get8();
-            mPayloadLen = ba.get32();
-            mNextState = STATE_BODY;
+                ByteBuffer   ba(data, HEADER_LEN);
+                mFrameType  = ba.get8();
+                mFrameID    = ba.get8();
+                mFrameSeqID = ba.get8();
+                mPayloadLen = ba.get32();
+                mNextState = STATE_BODY;
+                cb -= HEADER_LEN;
+            }
+            // no break
+
+            case STATE_BODY:
+            {
+                u32 bodylen = mPayloadLen - HEADER_LEN;
+                
+                if (cb < bodylen)
+                    return len;
+
+                mUDP.read(&mBuffer[HEADER_LEN], bodylen);
+                //Utils::dump(&mBuffer[HEADER_LEN], bodylen);
+                len = parseFrame(&mBuffer[HEADER_LEN], bodylen, dataAck);
+                dataAck += len;
+                size    += len;
+                    //Utils::printf("-------------------------RX END  : %s-----------------------\n\n", mName);
+
+                mNextState = STATE_HEADER;
+                    cb -= bodylen;
+            }
+            break;
         }
-
-        case STATE_BODY:
-        {
-            u32 bodylen = mPayloadLen - HEADER_LEN;
-            
-            if (mUDP.available() < bodylen)
-                return len;
-
-            mUDP.read(&mBuffer[HEADER_LEN], bodylen);
-            //Utils::dump(&mBuffer[HEADER_LEN], bodylen);
-            len = parseFrame(&mBuffer[HEADER_LEN], bodylen, dataAck);
-            //Utils::printf("-------------------------RX END -----------------------\n\n");
-
-            mNextState = STATE_HEADER;
-        }
-        break;
     }
 
-    return len;
+    return size;
 }
