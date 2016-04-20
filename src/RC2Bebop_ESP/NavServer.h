@@ -53,8 +53,6 @@ private:
 
 
     WiFiUDP mUDP;
-
-    u8  *mStrHost;
     int mPort;
 
     u8  mBuffer[1124];
