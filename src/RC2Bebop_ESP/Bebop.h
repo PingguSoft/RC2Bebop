@@ -34,7 +34,16 @@ enum {
 
 enum {
     BUFFER_ID_PING = 0,
-    BUFFER_ID_PONG = 1
+    BUFFER_ID_PONG = 1,
+
+    BUFFER_ID_C2D_PCMD = 10,            // Non ack data (periodic commands for piloting and camera orientation)
+    BUFFER_ID_C2D_SETTINGS = 11,        // Ack data (Events, settings ...)
+    BUFFER_ID_C2D_EMERGENCY = 12,       // Emergency data (Emergency command only)
+    BUFFER_ID_C2D_VID_ACK = 13,         // ARStream video acks
+    
+    BUFFER_ID_D2C_RPT = 127,            // Non ack data (periodic reports from the device)
+    BUFFER_ID_D2C_ACK_SETTINGS = 126,   // Ack data (Events, settings ...)
+    BUFFER_ID_D2C_VID = 125,            // ARStream video data
 };
 
 enum {

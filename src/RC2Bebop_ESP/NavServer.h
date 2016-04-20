@@ -11,8 +11,8 @@
  see <http://www.gnu.org/licenses/>
 */
 
-#ifndef _RECEIVER_H_
-#define _RECEIVER_H_
+#ifndef _NAV_SERVER_H_
+#define _NAV_SERVER__H_
 
 #include <WiFiUdp.h>
 #include "Common.h"
@@ -25,7 +25,7 @@
 // https://github.com/Parrot-Developers/libARCommands/blob/master/Xml/ARDrone3_commands.xml
 
 
-class Receiver
+class NavServer
 {
 public:
     enum {
@@ -34,12 +34,16 @@ public:
     };
 
 
-    Receiver(int port);
-    ~Receiver();
+    NavServer();
+    NavServer(int port);
+    ~NavServer();
 
+    void setPort(int port) { mPort = port; }
     int recv(u8 *data, int size);
     void begin(void);
     int  process(u8 *dataAck);
+    u8   *getData(void)     { return mBuffer;       }
+    u32  getDataSize(void)  { return mPayloadLen;   }
 // datetime.datetime.now().date().isoformat()                ==> '2016-04-15'              V
 // datetime.datetime.now().time().isoformat()                ==> '18:55:34.756000'
 // datetime.datetime.now().time().strftime("T%H%M%S+0000")   ==> 'T185603+0000'            V
@@ -53,15 +57,13 @@ private:
     u8  *mStrHost;
     int mPort;
 
-    u8  mHeader[10];
-    u8  mBody[1024];
+    u8  mBuffer[1124];
     u8  mNextState;
 
     u8  mFrameType;
     u8  mFrameID;
     u8  mFrameSeqID;
     u32 mPayloadLen;
-    u32 mBodyLen;
 
     u16 mVidFrameNo;
 };

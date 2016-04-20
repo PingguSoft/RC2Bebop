@@ -30,8 +30,10 @@
 class Commands
 {
 public:
-    Commands(char *host, int port);
+    Commands();
     ~Commands();
+
+    void setDest(IPAddress destIP, int destport)    { mDestIP = destIP; mPort = destport; }
     void sendto(u8 *data, int size);
 
     void takeOff(void);
@@ -59,23 +61,24 @@ public:
     s8   getGaz(void)   { return mGaz;      }
 
 private:
-    u8  mBuf[1024];
+    u8      mBuf[512];
     WiFiUDP mUDP;
     Bebop   mBebop;
 
-    char *mStrHost;
-    int  mPort;
-    long mLastTS;
+    IPAddress mDestIP;
+    int       mPort;
+    
+    long    mLastTS;
 
-    u8   mEnRollPitch;
-    s8   mRoll;
-    s8   mPitch;
-    s8   mYaw;
-    s8   mGaz;
+    u8      mEnRollPitch;
+    s8      mRoll;
+    s8      mPitch;
+    s8      mYaw;
+    s8      mGaz;
 
-    u8   mCfgIdx;
+    u8      mCfgIdx;
 
-    u8   mPCMDSeq;
+    u8      mPCMDSeq;
 };
 
 #endif

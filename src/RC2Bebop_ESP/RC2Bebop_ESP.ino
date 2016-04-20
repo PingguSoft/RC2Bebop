@@ -2,7 +2,7 @@
 #include <stdarg.h>
 #include <ESP8266WiFi.h>
 #include "Commands.h"
-#include "Receiver.h"
+#include "NavServer.h"
 #include "ByteBuffer.h"
 #include "SerialProtocol.h"
 
@@ -15,15 +15,28 @@ enum {
     STATE_WORK,
 };
 
-static char *HOST = "192.168.42.1";
+#define DISCOVERY_PORT      44444
+#define NAV_SERVER_PORT     52000
 
 static SerialProtocol   mSerial;
-static WiFiClient       mClient;
-static Commands         mControl(HOST, 54321);
-static Receiver         mNavData(43210);
+static WiFiClient       mBebopDiscoveryClient;
+static Commands         mControl;
+static NavServer        mNavServer(NAV_SERVER_PORT);
 static u8               mNextState = STATE_INIT;
 
-void WiFiEvent(WiFiEvent_t event) {
+static u8 dataAck[1024];
+static u8 recVideo = 0;
+static s8 speed = 0;
+static s8 roll = 0;
+static s8 pitch = 0;
+static s8 yaw = 0;
+static s8 aux1 = 0;
+static s8 aux2 = 0;
+static s8 aux3 = 0;
+static s8 aux4 = 0;
+
+
+static void WiFiEvent(WiFiEvent_t event) {
     Utils::printf("[WiFi-event] event: %d\n", event);
 
     switch(event) {
@@ -43,20 +56,7 @@ void WiFiEvent(WiFiEvent_t event) {
     }
 }
 
-
-static u8 dataAck[1024];
-static u8 recVideo = 0;
-static s8 speed = 0;
-static s8 roll = 0;
-static s8 pitch = 0;
-static s8 yaw = 0;
-static s8 aux1 = 0;
-static s8 aux2 = 0;
-static s8 aux3 = 0;
-static s8 aux4 = 0;
-
-
-void handleKey(void)
+static void handleKey(void)
 {
     int size;
 
@@ -119,6 +119,10 @@ void handleKey(void)
                 speed = 0;
                 Utils::printf("reset pos\n");
                 break;
+
+            case 'r':
+                mNextState = STATE_INIT;
+                break;
         }
     }
     u8 flag = 0;
@@ -127,10 +131,19 @@ void handleKey(void)
     mControl.move(flag, roll, pitch, yaw, speed);
 }
 
-void scanAndConnect(void)
+static bool bebop_scanAndConnect(void)
 {
-    int n = WiFi.scanNetworks();
+    if (WiFi.isConnected()) {
+        if (!strncmp(WiFi.SSID().c_str(), "BebopDrone", 10)) {
+            mNextState = STATE_DISCOVERY;
+            mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
+            return true;
+        } else {
+            WiFi.disconnect();
+        }
+    }
 
+    int n = WiFi.scanNetworks();
     if (n == 0) {
         Utils::printf("no networks found\n");
     } else {
@@ -140,53 +153,72 @@ void scanAndConnect(void)
             if (!strncmp(WiFi.SSID(i).c_str(), "BebopDrone", 10)) {
                 WiFi.onEvent(WiFiEvent);
                 WiFi.begin(WiFi.SSID(i).c_str(), "");
-                mNextState = STATE_AP_CONNECT;
                 Utils::printf("Connect to BebopDrone !!!\n");
-                mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
-                break;
+                return true;
             }
         }
     }
+    return false;
 }
 
-void connectDiscovery(void)
+static bool bebop_connectDiscovery(void)
 {
-    Utils::printf("Connect to discovery socket !!!\n");
+    IPAddress hostIP = WiFi.localIP();
+    hostIP[3] = 1;
 
-    if (!mClient.connect(HOST, 44444)) {
+    WiFi.removeEvent(WiFiEvent);
+    Utils::printf("bebop_connectDiscovery : %s, %d\n", hostIP.toString().c_str(), DISCOVERY_PORT);
+    if (!mBebopDiscoveryClient.connect(hostIP, DISCOVERY_PORT)) {
         Utils::printf("Connection Failed !!!\n");
     } else {
-        char *req = "{\"controller_type\":\"computer\", \"controller_name\":\"UniConTX\", \"d2c_port\":\"43210\"}";
-        mClient.print(req);
-        mClient.flush();
-        mNextState = STATE_DISCOVERY_ACK;
-        mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
+        char req[200];
+        sprintf(req,"{\"d2c_port\":%d, \"controller_name\":\"UniConTX\", \"controller_type\":\"computer\"}", NAV_SERVER_PORT);
+        Utils::printf("to bebop : %s\n", req);
+        mBebopDiscoveryClient.print(req);
+        mBebopDiscoveryClient.flush();
+        return true;
     }
+
+    return false;
 }
 
-void handleDiscovery(void)
+static bool bebop_handleDiscovery(void)
 {
-    u8  buf[256];
+    u8      buf[256];
+    char    sv[20];
 
     Utils::printf("Waiting response !!!\n");
-    while (mClient.available()) {
-        int len = mClient.read(buf, 256);
+    while (mBebopDiscoveryClient.available()) {
+        int len = mBebopDiscoveryClient.read(buf, 256);
         if (len > 0) {
             Utils::printf("%d %s\n", len, (char*)buf);
-            mNavData.begin();
-            mNextState = STATE_CONFIG;
-            mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
+            //{ "status": 0, "c2d_port": 54321, "arstream_fragment_size": 65000, "arstream_fragment_maximum_number": 4, "arstream_max_ack_interval": -1, "c2d_update_port": 51, "c2d_user_port": 21 }            
+
+            char *ptr = strstr((char*)buf, "\"c2d_port\":");
+            if (ptr) {
+                ptr += strlen("\"c2d_port\":");
+                char *comma = strstr(ptr, ",");
+                char szPort[20];
+                
+                strncpy(szPort, ptr, comma - ptr);
+                szPort[comma - ptr] = 0;
+                int port = atoi(szPort);
+                Utils::printf("dev command (c2d_port):%d !!\n", port);
+                mControl.setDest(mBebopDiscoveryClient.remoteIP(), port);
+                mBebopDiscoveryClient.stop();
+            }
+            return true;
         }
-        //{ "status": 0, "c2d_port": 54321, "arstream_fragment_size": 65000, "arstream_fragment_maximum_number": 4, "arstream_max_ack_interval": -1, "c2d_update_port": 51, "c2d_user_port": 21 }
     }
+    return false;
 }
 
-s16 map(s16 v)
+static s16 map(s16 v)
 {
     return (-5 <= v && v <= 5) ? 0 : v;
 }
 
-u32 serialCallback(u8 cmd, u8 *data, u8 size)
+static u32 serialCallback(u8 cmd, u8 *data, u8 size)
 {
     u8 flag = 0;
     u32 ret = 0;
@@ -233,20 +265,29 @@ void setup() {
 
 void loop()
 {
-    u8  size;
+    int  size;
 
-#if 1
     switch (mNextState) {
         case STATE_INIT:
-            scanAndConnect();
+            if (bebop_scanAndConnect()) {
+                mNextState = STATE_AP_CONNECT;
+                mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
+            }
             break;
 
         case STATE_DISCOVERY:
-            connectDiscovery();
+            if (bebop_connectDiscovery()) {
+                mNextState = STATE_DISCOVERY_ACK;
+                mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
+            }
             break;
 
         case STATE_DISCOVERY_ACK:
-            handleDiscovery();
+            if (bebop_handleDiscovery()) {
+                mNavServer.begin();
+                mNextState = STATE_CONFIG;
+                mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
+            }
             break;
 
         case STATE_CONFIG:
@@ -254,19 +295,17 @@ void loop()
                 mNextState = STATE_WORK;
                 mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
             }
-
-            size = mNavData.process(dataAck);
+            size = mNavServer.process(dataAck);
             if (size > 0)
                 mControl.process(dataAck, size);
             break;
 
         case STATE_WORK:
-            size = mNavData.process(dataAck);
+            size = mNavServer.process(dataAck);
             mControl.process(dataAck, size);
             break;
     }
 //    handleKey();
     mSerial.handleRX();
-#endif
 }
 
