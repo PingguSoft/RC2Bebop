@@ -36,13 +36,13 @@ enum {
     BUFFER_ID_PING = 0,
     BUFFER_ID_PONG = 1,
 
-    BUFFER_ID_C2D_PCMD = 10,            // Non ack data (periodic commands for piloting and camera orientation)
-    BUFFER_ID_C2D_SETTINGS = 11,        // Ack data (Events, settings ...)
+    BUFFER_ID_C2D_NONACK = 10,          // Non ack data (periodic commands for piloting and camera orientation)
+    BUFFER_ID_C2D_ACK = 11,             // Ack data (Events, settings ...)
     BUFFER_ID_C2D_EMERGENCY = 12,       // Emergency data (Emergency command only)
     BUFFER_ID_C2D_VID_ACK = 13,         // ARStream video acks
     
-    BUFFER_ID_D2C_RPT = 127,            // Non ack data (periodic reports from the device)
-    BUFFER_ID_D2C_ACK_SETTINGS = 126,   // Ack data (Events, settings ...)
+    BUFFER_ID_D2C_NAV = 127,            // Non ack data (periodic reports from the device)
+    BUFFER_ID_D2C_EVENT = 126,          // Ack data (Events, settings ...)
     BUFFER_ID_D2C_VID = 125,            // ARStream video data
 };
 
@@ -196,12 +196,12 @@ public:
                    case 'q':
                    case 'Q':
                         vu64 = va_arg(ap, u64);
-                        size = Utils::putlonglong(&buf[idx], vu64);
+                        size = Utils::putlonglong(&buf[idx], &vu64);
                         break;
 
                    case 'f':
                         vf   = va_arg(ap, float);
-                        size = Utils::putfloat(&buf[idx], vf);
+                        size = Utils::putfloat(&buf[idx], &vf);
                         break;
 
                    case 's':

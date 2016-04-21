@@ -5,6 +5,7 @@
 #include "NavServer.h"
 #include "ByteBuffer.h"
 #include "SerialProtocol.h"
+#include "StatusLED.h"
 
 enum {
     STATE_INIT = 0,
@@ -23,6 +24,7 @@ static WiFiClient       mBebopDiscoveryClient;
 static Commands         mControl;
 static NavServer        mNavServer(NAV_SERVER_PORT);
 static u8               mNextState = STATE_INIT;
+static bool             mBattWarn = false;
 
 static u8 dataAck[1024];
 static u8 recVideo = 0;
@@ -35,6 +37,7 @@ static s8 aux2 = 0;
 static s8 aux3 = 0;
 static s8 aux4 = 0;
 
+static StatusLED    mLED(mSerial);
 
 static void WiFiEvent(WiFiEvent_t event) {
     Utils::printf("[WiFi-event] event: %d\n", event);
@@ -44,14 +47,12 @@ static void WiFiEvent(WiFiEvent_t event) {
             Serial.println("WiFi connected");
             Utils::printf("IP address: %s\n", WiFi.localIP().toString().c_str());
             mNextState = STATE_DISCOVERY;
-            mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
             break;
 
 
         case WIFI_EVENT_STAMODE_DISCONNECTED:
             Utils::printf("WiFi lost connection\n");
             mNextState = STATE_INIT;
-            mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
             break;
     }
 }
@@ -136,7 +137,6 @@ static bool bebop_scanAndConnect(void)
     if (WiFi.isConnected()) {
         if (!strncmp(WiFi.SSID().c_str(), "BebopDrone", 10)) {
             mNextState = STATE_DISCOVERY;
-            mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
             return true;
         } else {
             WiFi.disconnect();
@@ -261,6 +261,7 @@ void setup() {
 
     Utils::printf("Ready !!!\n");
     mSerial.setCallback(serialCallback);
+    mLED.set(StatusLED::LED_GREEN, 300);
 }
 
 void loop()
@@ -271,14 +272,12 @@ void loop()
         case STATE_INIT:
             if (bebop_scanAndConnect()) {
                 mNextState = STATE_AP_CONNECT;
-                mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
             }
             break;
 
         case STATE_DISCOVERY:
             if (bebop_connectDiscovery()) {
                 mNextState = STATE_DISCOVERY_ACK;
-                mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
             }
             break;
 
@@ -286,14 +285,13 @@ void loop()
             if (bebop_handleDiscovery()) {
                 mNavServer.begin();
                 mNextState = STATE_CONFIG;
-                mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
             }
             break;
 
         case STATE_CONFIG:
             if (mControl.config()) {
                 mNextState = STATE_WORK;
-                mSerial.sendCmd(SerialProtocol::CMD_SET_STATE, &mNextState, 1);
+                mLED.set(StatusLED::LED_GREEN, 0);
             }
             size = mNavServer.process(dataAck);
             if (size > 0)
@@ -306,6 +304,14 @@ void loop()
             break;
     }
 //    handleKey();
+
+    u8 batt = mNavServer.getBatt();
+    if (!mBattWarn && batt != 0 && batt < 20) {
+        mLED.set(StatusLED::LED_PURPLE, 50);
+        mBattWarn = true;
+    }
+
     mSerial.handleRX();
+    mLED.process();    
 }
 

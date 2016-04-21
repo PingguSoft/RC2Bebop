@@ -18,11 +18,12 @@
 #include <Arduino.h>
 #include <stdarg.h>
 #include "Common.h"
+#include "Utils.h"
 
 // Bit vector from bit position
 #define BV(bit) (1 << (bit))
 
-#define PRINT_FUNC  //Serial.printf("-------------------------> %s\n", __func__)
+#define PRINT_FUNC  Utils::printf("-------------------------> %s\n", __func__)
 
 class Utils
 {
@@ -76,9 +77,9 @@ public:
         return v;
     }
 
-    static inline int putfloat(u8 *buf, float v)
+    static inline int putfloat(u8 *buf, float *v)
     {
-        memcpy(buf, &v, sizeof(float));
+        memcpy(buf, v, sizeof(float));
         return sizeof(float);
     }
 
@@ -90,9 +91,9 @@ public:
         return v;
     }
 
-    static inline int putdouble(u8 *buf, double v)
+    static inline int putdouble(u8 *buf, double *v)
     {
-        memcpy(buf, &v, sizeof(double));
+        memcpy(buf, v, sizeof(double));
         return sizeof(double);
     }
 
@@ -104,9 +105,9 @@ public:
         return v;
     }
 
-    static inline int putlonglong(u8 *buf, unsigned long long v)
+    static inline int putlonglong(u8 *buf, unsigned long long *v)
     {
-        memcpy(buf, &v, sizeof(unsigned long long));
+        memcpy(buf, v, sizeof(unsigned long long));
         return sizeof(unsigned long long);
     }
 

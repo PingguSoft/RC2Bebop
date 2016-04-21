@@ -78,7 +78,6 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
         case FRAME_TYPE_ACK:
             if (mPayloadLen == 8 && mFrameID == 0x8b) {
                 Utils::printf(">> ACKACK       : %d\n", *data);
-                len = Bebop::buildCmd(dataAck, FRAME_TYPE_ACK, 0xFE, "B", mFrameSeqID);
             }
             return len;
 
@@ -88,38 +87,42 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                 u8  frameFlags   = ba.get8();
                 u8  fragNo       = ba.get8();
                 u8  fragPerFrame = ba.get8();
-                static u64 ackLow;
-                static u64 ackHigh;
 
                 if (frameNo != mVidFrameNo) {
-                    ackLow  = 0;
-                    ackHigh = 0;
+                    mAckLow  = 0;
+                    mAckHigh = 0;
                     mVidFrameNo = frameNo;
                 }
 
                 if (fragNo < 64)
-                    ackLow |= (1 << fragNo);
+                    mAckLow |= (1 << fragNo);
                 else
-                    ackHigh |= (1 << (fragNo - 64));
+                    mAckHigh |= (1 << (fragNo - 64));
 
                 Utils::printf(">> VIDEO        : %05d, %02X, %03d, %03d\n", frameNo, frameFlags, fragNo, fragPerFrame);
-                len = Bebop::buildCmd(dataAck, FRAME_TYPE_DATA, 13, "HQQ", frameNo, ackHigh, ackLow);
+                len = Bebop::buildCmd(dataAck, FRAME_TYPE_DATA, BUFFER_ID_C2D_VID_ACK, "HQQ", frameNo, mAckHigh, mAckLow);
+                return len;
             }
-            return len;
+            Utils::printf(">> VIDEO        : ERROR !!!\n");
+            return 0;
+
+        case FRAME_TYPE_DATA:
+            if (mFrameID == BUFFER_ID_PING) {
+                Utils::printf(">> Ping Stamp   : %d.%d\n", ba.get32(), ba.get32() / 1000000000);
+                len = Bebop::buildCmd(dataAck, FRAME_TYPE_DATA, BUFFER_ID_PONG, "P", size, data);
+                return len;
+            }
+            break;
 
         case FRAME_TYPE_DATA_WITH_ACK:
-            Utils::printf(">> ACK REQUIRED : %d %d %d\n", mFrameType, mFrameID, mFrameSeqID);
+            //Utils::printf(">> ACK REQUIRED : %d %d %d\n", mFrameType, mFrameID, mFrameSeqID);
             len = Bebop::buildCmd(dataAck, FRAME_TYPE_ACK, 0x80 | mFrameID, "B", mFrameSeqID);
-            return len;
+            break;
+            // no return
     }
 
     switch(mFrameID) {
-        case BUFFER_ID_PING:
-            Utils::printf(">> Ping Stamp   : %d.%d\n", ba.get32(), ba.get32() / 1000000000);
-            len = Bebop::buildCmd(dataAck, FRAME_TYPE_DATA, BUFFER_ID_PONG, "P", size, data);
-            break;
-
-        case BUFFER_ID_D2C_RPT:
+        case BUFFER_ID_D2C_NAV:
             cmdID = PACK_CMD(ba.get8(), ba.get8(), ba.get16());
             cmd   = GET_CMD(cmdID);
 
@@ -153,7 +156,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
             }
             break;
 
-        case BUFFER_ID_D2C_ACK_SETTINGS:
+        case BUFFER_ID_D2C_EVENT:
             cmdID = PACK_CMD(ba.get8(), ba.get8(), ba.get16());
             cmd   = GET_CMD(cmdID);
 
@@ -189,17 +192,18 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                             break;
 
                         default:
-                            Utils::printf(">> UNKNOWN      : %08x\n", cmdID);
+                            Utils::printf(">> UNKNOWN (0,3): %08x\n", cmdID);
                     }
                     break;
 
                 case PACK_PRJ_CLS(PROJECT_COMMON, COMMON_CLASS_COMMONSTATE):
                     switch (cmd) {
                         case 1:
-                            Utils::printf(">> Battery      : %d\n", ba.get8());
+                            mBatt = ba.get8();
+                            Utils::printf(">> Battery      : %d\n", mBatt);
                             break;
-                            
-                        case 2:
+
+                        case 4:
                             Utils::printf(">> Date         : %s\n", ba.getstr());
                             break;
                             
@@ -262,11 +266,11 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                 case PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTINGSETTINGSSTATE):
                     switch (cmd) {
                         case 0:
-                            Utils::printf(">> Max Alt      : %f %f %f\n", ba.getfloat(), ba.getfloat(), ba.getfloat());
+                            Utils::printf(">> Max Alt      : %s %s %s\n", Utils::ftoa(buf, ba.getfloat()), Utils::ftoa(buf, ba.getfloat()), Utils::ftoa(buf, ba.getfloat()));
                             break;
                             
                         case 1:
-                            Utils::printf(">> Max Tilt     : %f %f %f\n", ba.getfloat(), ba.getfloat(), ba.getfloat());
+                            Utils::printf(">> Max Tilt     : %s %s %s\n", Utils::ftoa(buf, ba.getfloat()), Utils::ftoa(buf, ba.getfloat()), Utils::ftoa(buf, ba.getfloat()));
                             break;
 
                         case 2:
@@ -317,7 +321,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 
                 case PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_PICTURESETTINGSSTATE):
                     if (cmd == 5) {
-                        Utils::printf(">> VideoRec Stat: %d %d\n", ba.get8(), ba.get8());
+                        Utils::printf(">> VideoAutoRec : %d %d\n", ba.get8(), ba.get8());
                     }
                     break;
 
@@ -330,7 +334,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                 case PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_GPSSETTINGSSTATE):
                     switch (cmd) {
                         case 0:
-                            Utils::printf(">> Home Changed : %f %f\n", ba.getdouble(), ba.getdouble());
+                            Utils::printf(">> Home Changed : %s %s\n", Utils::dtoa(buf, ba.getdouble()), Utils::dtoa(buf, ba.getdouble()));
                             break;
 
                         case 2:

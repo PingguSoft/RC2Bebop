@@ -56,21 +56,21 @@ void Commands::move(u8 enRollPitch, s8 roll, s8 pitch, s8 yaw, s8 gaz)
 void Commands::enableVideoAutoRecording(u8 enable, u8 storage)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBHBB", PROJECT_ARDRONE3, ARDRONE3_CLASS_PICTURESETTINGS, 5, enable, storage);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHBB", PROJECT_ARDRONE3, ARDRONE3_CLASS_PICTURESETTINGS, 5, enable, storage);
     sendto(mBuf, size);
 }
 
 void Commands::takePicture(u8 storage)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBHB", PROJECT_ARDRONE3, ARDRONE3_CLASS_MEDIARECORD, 0, storage);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHB", PROJECT_ARDRONE3, ARDRONE3_CLASS_MEDIARECORD, 0, storage);
     sendto(mBuf, size);
 }
 
 void Commands::recordVideo(u8 enable, u8 storage)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBHBB", PROJECT_ARDRONE3, ARDRONE3_CLASS_MEDIARECORD, 1, enable, storage);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHBB", PROJECT_ARDRONE3, ARDRONE3_CLASS_MEDIARECORD, 1, enable, storage);
     sendto(mBuf, size);
 }
 
@@ -81,77 +81,77 @@ void Commands::recordVideo(u8 enable, u8 storage)
 void Commands::setDate(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 1, "2016-04-20");
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 1, "2016-04-21");
     sendto(mBuf, size);
 }
 
 void Commands::setTime(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 2, "T152803+0000");
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 2, "T184503+0000");
     sendto(mBuf, size);
 }
 
 void Commands::enableVideoStreaming(u8 enable)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBHB", PROJECT_ARDRONE3, ARDRONE3_CLASS_MEDIASTREAMING, 0, enable);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHB", PROJECT_ARDRONE3, ARDRONE3_CLASS_MEDIASTREAMING, 0, enable);
     sendto(mBuf, size);
 }
 
 void Commands::moveCamera(s8 tilt, s8 pan)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBHBB", PROJECT_ARDRONE3, ARDRONE3_CLASS_CAMERA, 0, tilt, pan);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHBB", PROJECT_ARDRONE3, ARDRONE3_CLASS_CAMERA, 0, tilt, pan);
     sendto(mBuf, size);
 }
 
 void Commands::takeOff(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 1);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 1);
     sendto(mBuf, size);
 }
 
 void Commands::land(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 3);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 3);
     sendto(mBuf, size);
 }
 
 void Commands::emergency(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 4);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 4);
     sendto(mBuf, size);
 }
 
 void Commands::trim(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 0);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 0);
     sendto(mBuf, size);
 }
 
 void Commands::requestSettings(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_COMMON, COMMON_CLASS_SETTINGS, 0);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBH", PROJECT_COMMON, COMMON_CLASS_SETTINGS, 0);
     sendto(mBuf, size);
 }
 
 void Commands::requestStates(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_COMMON, COMMON_CLASS_COMMON, 0);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBH", PROJECT_COMMON, COMMON_CLASS_COMMON, 0);
     sendto(mBuf, size);
 }
 
 void Commands::resetHome(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_SETTINGS, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_GPSSETTINGS, 1);
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBH", PROJECT_ARDRONE3, ARDRONE3_CLASS_GPSSETTINGS, 1);
     sendto(mBuf, size);
 }
 
@@ -161,7 +161,7 @@ bool Commands::config(void)
     long ts   = millis();
     int  diff = ts - mLastTS;
 
-    if (diff >= 50) {
+    if (diff >= 10) {
         switch (mCfgIdx) {
             case 0: setDate();                      break;
             case 1: setTime();                      break;
@@ -169,7 +169,9 @@ bool Commands::config(void)
             case 3: requestSettings();              break;
             case 4: moveCamera(0, 0);               break;
             case 5: enableVideoAutoRecording(1);    break;
-            case 6: enableVideoStreaming(0);
+            case 7: recordVideo(1);                 break;
+            case 8: enableVideoStreaming(1);
+                mCfgIdx = 0;
                 done = true;
                 break;
         }
@@ -198,7 +200,7 @@ void Commands::process(u8 *dataAck, int size)
             flag = 1;
 
         //Serial.println("PCMD");
-        int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_PCMD, "BBHBbbbbI", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 2,
+        int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHBbbbbI", PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTING, 2,
             flag, mRoll, mPitch, mYaw, mGaz, tsPCMD);
         sendto(mBuf, size);
 

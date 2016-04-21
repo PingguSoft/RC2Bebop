@@ -47,6 +47,8 @@ public:
 
     virtual int preProcess(u8 *data, u32 size, u8 *dataAck);
 
+    u8   getBatt(void)      { return mBatt; }
+
 protected:
     int parseFrame(u8 *data, u32 size, u8 *dataAck);
 
@@ -62,6 +64,10 @@ protected:
     u32 mPayloadLen;
 
     u16 mVidFrameNo;
+    u64 mAckLow;
+    u64 mAckHigh;
+    
+    u8  mBatt;
 };
 
 #endif
