@@ -25,6 +25,8 @@
 // https://github.com/Parrot-Developers/libARCommands/blob/master/Xml/ARDrone3_commands.xml
 // https://github.com/Parrot-Developers/libARCommands/blob/master/gen/Includes/libARCommands/ARCOMMANDS_Ids.h
 
+#define HEADER_LEN  7
+
 enum {
     FRAME_TYPE_ACK = 0x1,
     FRAME_TYPE_DATA = 0x2,

@@ -41,7 +41,9 @@ NavServer::~NavServer()
 int NavServer::recv(u8 *data, int size)
 {
     int cb = mUDP.parsePacket();
-    if (!cb || mUDP.available() < size)
+    cb = mUDP.available();
+    
+    if (cb < size)
         return 0;
 
     return mUDP.read(data, size);
@@ -369,7 +371,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
 void NavServer::begin(void)
 {
     if (mPort == 0) {
-        Utils::printf("NO PORT !!!\n");
+        Utils::printf("NavServer : NO PORT !!!\n");
         return;
     }
     mUDP.begin(mPort);
@@ -383,6 +385,10 @@ int NavServer::process(u8 *dataAck)
     int size = 0;
 
     cb = mUDP.available();
+
+    if (cb > 1024) {
+        Utils::printf("BIG DATA !!! : %d\n", cb);
+    }
    
     while (cb > 0) {
         switch (mNextState) {

@@ -18,13 +18,6 @@
 #include "Common.h"
 #include "Bebop.h"
 
-#define HEADER_LEN  7
-
-// http://robotika.cz/robots/katarina/en#150202
-// https://github.com/robotika/katarina
-// https://github.com/Parrot-Developers/libARCommands/blob/master/Xml/ARDrone3_commands.xml
-
-
 class NavServer
 {
 public:
