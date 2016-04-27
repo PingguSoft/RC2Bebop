@@ -14,10 +14,6 @@
 */
 
 #include <Arduino.h>
-#include <avr/pgmspace.h>
-#include <avr/wdt.h>
-#include <SPI.h>
-
 #include "common.h"
 #include "utils.h"
 #include "RCRcvrPWM.h"
@@ -63,6 +59,7 @@ static const PROGMEM u8 TBL_PINS_RX2[] = {
     PIN_AUX3, PIN_AUX4
 };
 
+// AETR1234
 static const u8 TBL_CH_MAP[] = {
     3, 2, 0, 1, 4, 5, 6, 7
 };
@@ -73,7 +70,7 @@ static s16 sRC[sizeof(TBL_PINS_RX1) + sizeof(TBL_PINS_RX2)];
 s16 RCRcvrPWM::getRC(u8 ch)
 {
     if (ch >= getChCnt())
-        return -100;
+        return 1000;
 
     return sRC[ch];
 }
@@ -88,13 +85,13 @@ u8 RCRcvrPWM::getChCnt(void)
     return sizeof(TBL_PINS_RX1) + sizeof(TBL_PINS_RX2);
 }
 
+
 void RCRcvrPWM::init(void)
 {
-    memset(sRC, 0, sizeof(sRC));
-    for (u8 i = 0; i < sizeof(sRC); i++)
+    for (u8 i = 1; i < sizeof(sRC); i++)
         sRC[i] = 1500;
 
-    sRC[0] = 1200;  // throttle min
+    sRC[0] = 1000;  // throttle min
 
     for (u8 i = 0; i < sizeof(TBL_PINS_RX1); i++) {
         u8 pin = pgm_read_byte(TBL_PINS_RX1 + i);
@@ -158,7 +155,7 @@ void calcPeriod(u8 idx, u16 ts, u8 mask, u8 pins)
         if (mask & bv) {
             if (!(pins & bv)) {
                 wDiff  = constrain(ts - wPrevTime[start + i], 1000, 2000);
-                sRC[start + i] = wDiff; //map(wDiff, 1000, 2000, -100, 100);
+                sRC[start + i] = wDiff;
             } else {
                 wPrevTime[start + i] = ts;
             }

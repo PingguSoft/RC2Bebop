@@ -16,7 +16,6 @@
 #ifndef _RCVR_PWM_H_
 #define _RCVR_PWM_H_
 #include <Arduino.h>
-#include <avr/pgmspace.h>
 #include "Common.h"
 #include "RCRcvr.h"
 
