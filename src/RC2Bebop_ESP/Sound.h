@@ -4,8 +4,6 @@
  the Free Software Foundation, either version 3 of the License, or
  (at your option) any later version.
 
- This program is derived from deviationTx project for Arduino.
-
  This program is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -13,22 +11,30 @@
  see <http://www.gnu.org/licenses/>
 */
 
-#ifndef _UTILS_H_
-#define _UTILS_H_
+#ifndef _SOUND_H_
+#define _SOUND_H_
+
 #include <Arduino.h>
-#include <avr/pgmspace.h>
-#include "Common.h"
+#include <stdarg.h>
+#include "SerialProtocol.h"
+#include "pitches.h"
 
-// Bit vector from bit position
-#define BV(bit) (1 << (bit))
+class Sound
+{
+public:
 
-u32  rand32_r(u32 *seed, u8 update);
-u32  rand32();
+    Sound(SerialProtocol serial) {
+        mSerial = serial;
+     }
 
-#ifdef __DEBUG_PRINTF__
-void printf(char *fmt, ... );
-void printf(const __FlashStringHelper *fmt, ... );
-#else
-#define printf(...)
-#endif
+    ~Sound() { }
+
+    void play(u16 *note, u8 size) {
+        mSerial.sendCmd(SerialProtocol::CMD_PLAY_NOTE, (u8*)note, size);
+    }
+
+private:
+    SerialProtocol  mSerial;
+};
+
 #endif

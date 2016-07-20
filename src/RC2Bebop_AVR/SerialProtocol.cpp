@@ -71,6 +71,7 @@ u8 available(struct ringBuf *buf)
     return ((u8)(buf->head - buf->tail)) % MAX_BUF_SIZE;
 }
 
+#if 1
 ISR(USART_RX_vect)
 {
     putChar(&mRxRingBuf, UDR0);
@@ -92,6 +93,7 @@ ISR(USART_UDRE_vect)
     if (tail == buf->head)
         UCSR0B &= ~(1<<UDRIE0);
 }
+#endif
 
 SerialProtocol::SerialProtocol()
 {
@@ -173,7 +175,7 @@ void SerialProtocol::sendString(char *fmt, ...)
 }
 
 
-u8 SerialProtocol::getString(u8 *buf)
+u8 SerialProtocol::read(u8 *buf)
 {
     u8 size = available(&mRxRingBuf);
 

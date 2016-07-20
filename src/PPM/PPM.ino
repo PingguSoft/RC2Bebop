@@ -47,6 +47,7 @@ void setup()
     digitalWrite(PIN_LED1, LOW);
     digitalWrite(PIN_LED2, LOW);
     digitalWrite(PIN_LED3, LOW);
+    Serial.begin(57600);
     mRcvr.init();
 }
 
@@ -55,9 +56,9 @@ u8   beatStatus = 0;
 
 void loop()
 {
-//     sprintf(buf, "%4d %4d %4d %4d %4d %4d %4d %4d\n", mRcvr->getRC(0), mRcvr->getRC(1), mRcvr->getRC(2), mRcvr->getRC(3), mRcvr->getRC(4),
-//        mRcvr->getRC(5), mRcvr->getRC(6), mRcvr->getRC(7), mRcvr->getRC(8));
-//     Serial.print(buf);
+     sprintf(buf, "%4d %4d %4d %4d %4d %4d %4d %4d\n", mRcvr.getRC(0), mRcvr.getRC(1), mRcvr.getRC(2), mRcvr.getRC(3), mRcvr.getRC(4),
+        mRcvr.getRC(5), mRcvr.getRC(6), mRcvr.getRC(7), mRcvr.getRC(8));
+     Serial.print(buf);
 
     beatStatus = !beatStatus;
     digitalWrite(PIN_BEAT, beatStatus);

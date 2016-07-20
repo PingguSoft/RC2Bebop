@@ -19,7 +19,7 @@
 #include "utils.h"
 #include <stdarg.h>
 
-#define MAX_PACKET_SIZE 32
+#define MAX_PACKET_SIZE 64
 
 class SerialProtocol
 {
@@ -30,6 +30,7 @@ public:
         CMD_SET_RC,
         CMD_SET_STATE,
         CMD_GET_FREE_RAM,
+        CMD_PLAY_NOTE,
         CMD_TEST = 110,
     } CMD_T;
 
@@ -45,7 +46,7 @@ public:
 
     void sendString_P(const char *fmt, ...);
     void sendString(char *fmt, ...);
-    u8   getString(u8 *buf);
+    u8   read(u8 *buf);
     void clearTX(void);
     void clearRX(void);
 

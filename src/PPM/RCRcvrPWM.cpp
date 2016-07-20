@@ -51,21 +51,17 @@
 #define PCINT_RX2_PINS              PINB
 #define PCINT_RX2_IR_BIT            BV(0)
 
+// AETR1234 : PPM output order for cleanflight
 static const PROGMEM u8 TBL_PINS_RX1[] = {
-    PIN_THROTTLE, PIN_RUDDER, PIN_ELEVATOR, PIN_AILERON, PIN_AUX1, PIN_AUX2
+    PIN_AILERON, PIN_ELEVATOR, PIN_THROTTLE, PIN_RUDDER, PIN_AUX1, PIN_AUX2
 };
 
 static const PROGMEM u8 TBL_PINS_RX2[] = {
     PIN_AUX3, PIN_AUX4
 };
 
-// AETR1234
-static const u8 TBL_CH_MAP[] = {
-    3, 2, 0, 1, 4, 5, 6, 7
-};
-
 static u16 wPrevTime[sizeof(TBL_PINS_RX1) + sizeof(TBL_PINS_RX2)];
-static s16 sRC[sizeof(TBL_PINS_RX1) + sizeof(TBL_PINS_RX2)];
+static volatile s16 sRC[sizeof(TBL_PINS_RX1) + sizeof(TBL_PINS_RX2)];
 
 s16 RCRcvrPWM::getRC(u8 ch)
 {
@@ -77,7 +73,7 @@ s16 RCRcvrPWM::getRC(u8 ch)
 
 s16 *RCRcvrPWM::getRCs(void)
 {
-    return sRC;
+    return (s16*)sRC;
 }
 
 u8 RCRcvrPWM::getChCnt(void)
@@ -218,8 +214,8 @@ ISR(TIMER1_COMPA_vect)
             OCR1A = (PPM_FRLEN - calc_rest);
             calc_rest = 0;
         } else {
-            OCR1A = (sRC[TBL_CH_MAP[cur_chan_numb]] - PPM_PULSELEN);
-            calc_rest = calc_rest + sRC[TBL_CH_MAP[cur_chan_numb]];
+            OCR1A = (sRC[cur_chan_numb] - PPM_PULSELEN);
+            calc_rest = calc_rest + sRC[cur_chan_numb];
             cur_chan_numb++;
         }
     }

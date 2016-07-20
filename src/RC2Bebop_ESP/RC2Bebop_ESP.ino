@@ -6,6 +6,7 @@
 #include "ByteBuffer.h"
 #include "SerialProtocol.h"
 #include "StatusLED.h"
+#include "Sound.h"
 
 enum {
     STATE_INIT = 0,
@@ -38,6 +39,7 @@ static s8 aux3 = 0;
 static s8 aux4 = 0;
 
 static StatusLED    mLED(mSerial);
+static Sound        mSound(mSerial);
 
 static void WiFiEvent(WiFiEvent_t event) {
     Utils::printf("[WiFi-event] event: %d\n", event);
@@ -192,14 +194,14 @@ static bool bebop_handleDiscovery(void)
         int len = mBebopDiscoveryClient.read(buf, 256);
         if (len > 0) {
             Utils::printf("%d %s\n", len, (char*)buf);
-            //{ "status": 0, "c2d_port": 54321, "arstream_fragment_size": 65000, "arstream_fragment_maximum_number": 4, "arstream_max_ack_interval": -1, "c2d_update_port": 51, "c2d_user_port": 21 }            
+            //{ "status": 0, "c2d_port": 54321, "arstream_fragment_size": 65000, "arstream_fragment_maximum_number": 4, "arstream_max_ack_interval": -1, "c2d_update_port": 51, "c2d_user_port": 21 }
 
             char *ptr = strstr((char*)buf, "\"c2d_port\":");
             if (ptr) {
                 ptr += strlen("\"c2d_port\":");
                 char *comma = strstr(ptr, ",");
                 char szPort[20];
-                
+
                 strncpy(szPort, ptr, comma - ptr);
                 szPort[comma - ptr] = 0;
                 int port = atoi(szPort);
@@ -252,14 +254,18 @@ static u32 serialCallback(u8 cmd, u8 *data, u8 size)
     return ret;
 }
 
+
+#define DUR_2   (1000 / 2)
+#define DUR_4   (1000 / 4)
+#define DUR_8   (1000 / 8)
+
 void setup() {
     Serial.begin(57600);
 
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
-    delay(100);
+    delay(500);
 
-    Utils::printf("Ready !!!\n");
     mSerial.setCallback(serialCallback);
     mLED.set(StatusLED::LED_GREEN, 300);
 }
@@ -308,10 +314,13 @@ void loop()
     u8 batt = mNavServer.getBatt();
     if (!mBattWarn && batt != 0 && batt < 20) {
         mLED.set(StatusLED::LED_PURPLE, 50);
+
+        const u16 noteSiren[] = { 630, DUR_2, 315, DUR_2, 0xffff, 0xffff };
+        mSound.play((u16*)noteSiren, sizeof(noteSiren));
         mBattWarn = true;
     }
 
     mSerial.handleRX();
-    mLED.process();    
+    mLED.process();
 }
 

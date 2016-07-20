@@ -23,6 +23,23 @@
 #include "utils.h"
 #include "SerialProtocol.h"
 #include "RCRcvrPWM.h"
+#include "RCRcvrPPM.h"
+#include "Sound.h"
+
+//#define __DEBUG__   1
+
+#define DUR_2   (1000 / 2)
+#define DUR_4   (1000 / 4)
+#define DUR_8   (1000 / 8)
+
+
+static const u16 NOTE1[] PROGMEM = {
+    NOTE_C4, DUR_4, NOTE_G3, DUR_8, NOTE_G3, DUR_8, NOTE_A3, DUR_4, NOTE_G3, DUR_4, NOTE_NON, DUR_4, NOTE_B3, DUR_4, NOTE_C4, DUR_4
+};
+
+static const u16 NOTE_START[] PROGMEM = {
+    NOTE_C4, DUR_4, NOTE_E3, DUR_4, NOTE_G3, DUR_4, NOTE_C5, DUR_2
+};
 
 enum {
     STATE_INIT = 0,
@@ -33,15 +50,17 @@ enum {
     STATE_WORK,
 };
 
+#define PIN_SOUND   A3
 #define PIN_LED1    A0
 #define PIN_LED2    A1
 #define PIN_LED3    A2
 
 #define FW_VERSION  0x0120
 
-static SerialProtocol  mSerial;
-static RCRcvr *mRcvr = NULL;
-
+static Sound            mSound(PIN_SOUND);
+static SerialProtocol   mSerial;
+static RCRcvrPPM       *mRcvr = NULL;
+static u16              mNote[32];
 
 static void showLED(u8 color)
 {
@@ -58,9 +77,10 @@ static void initReceiver(void)
         delete mRcvr;
         mRcvr = NULL;
     }
-    mRcvr = new RCRcvrPWM();
-    if (mRcvr)
+    mRcvr = new RCRcvrPPM();
+    if (mRcvr) {
         mRcvr->init();
+    }
 }
 
 u32 serialCallback(u8 cmd, u8 *data, u8 size)
@@ -85,6 +105,12 @@ u32 serialCallback(u8 cmd, u8 *data, u8 size)
         case SerialProtocol::CMD_SET_STATE:
             showLED(*data);
             break;
+
+        case SerialProtocol::CMD_PLAY_NOTE:
+            memcpy(mNote, data, size);
+            mSound.play(mNote, size);
+            mSerial.sendString("PLAY : %d\n !!!", size);
+            break;
     }
     return ret;
 }
@@ -101,26 +127,60 @@ void setup()
     mSerial.begin(57600);
     mSerial.setCallback(serialCallback);
     initReceiver();
+    mSound.play(NOTE_START, sizeof(NOTE_START));
+
+#ifdef __DEBUG__
+    mSerial.sendString("READY !!!");
+#endif
 }
 
-char buf[255];
+#ifdef __DEBUG__
+static char buf[255];
+static void handleKey(void)
+{
+    int size;
+
+    size = mSerial.read((u8*)buf);
+    if (size > 0) {
+        u8 ch = (u8)buf[0];
+
+        switch (ch) {
+            case '1' : mSound.play(NOTE1, sizeof(NOTE1));
+            break;
+
+            case '2' : mSound.play(NOTE_START, sizeof(NOTE_START));
+            break;
+        }
+    }
+}
+#endif
 
 void loop()
 {
-    mSerial.handleRX();
-#if 1
+#ifdef __DEBUG__
     if (mRcvr) {
-        mSerial.sendCmd(SerialProtocol::CMD_SET_RC, (u8*)mRcvr->getRCs(), mRcvr->getChCnt() * 2);
-        delay(20);
+        static u32 lastTS;
+        u32 ts = millis();
+        if (ts - lastTS > 200) {
+            sprintf(buf, "T:%4d R:%4d E:%4d A:%4d %4d %4d %4d %4d\n", mRcvr->getRC(0), mRcvr->getRC(1), mRcvr->getRC(2), mRcvr->getRC(3), mRcvr->getRC(4),
+                mRcvr->getRC(5), mRcvr->getRC(6), mRcvr->getRC(7), mRcvr->getRC(8));
+            mSerial.sendString(buf);
+            lastTS = ts;
+        }
     }
+    handleKey();
 #else
+    mSerial.handleRX();
     if (mRcvr) {
-         sprintf(buf, "%4d %4d %4d %4d %4d %4d %4d %4d\n", mRcvr->getRC(0), mRcvr->getRC(1), mRcvr->getRC(2), mRcvr->getRC(3), mRcvr->getRC(4),
-            mRcvr->getRC(5), mRcvr->getRC(6), mRcvr->getRC(7), mRcvr->getRC(8));
-         mSerial.sendString(buf);
-        delay(100);
+        static u32 lastTS;
+        u32 ts = millis();
+        if (ts - lastTS > 20) {
+            mSerial.sendCmd(SerialProtocol::CMD_SET_RC, (u8*)mRcvr->getRCs(), mRcvr->getChCnt() * 2);
+            lastTS = ts;
+        }
     }
 #endif
+    mSound.handleSound();
 }
 
 int freeRam() {

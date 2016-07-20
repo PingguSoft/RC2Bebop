@@ -13,22 +13,29 @@
  see <http://www.gnu.org/licenses/>
 */
 
-#ifndef _UTILS_H_
-#define _UTILS_H_
+#ifndef _RCVR_PPM_H_
+#define _RCVR_PPM_H_
 #include <Arduino.h>
 #include <avr/pgmspace.h>
 #include "Common.h"
+#include "RCRcvr.h"
+#include "SerialProtocol.h"
 
-// Bit vector from bit position
-#define BV(bit) (1 << (bit))
+class RCRcvrPPM : public RCRcvr
+{
 
-u32  rand32_r(u32 *seed, u8 update);
-u32  rand32();
+public:
+    RCRcvrPPM():RCRcvr() { }
+    ~RCRcvrPPM()  { close(); }
 
-#ifdef __DEBUG_PRINTF__
-void printf(char *fmt, ... );
-void printf(const __FlashStringHelper *fmt, ... );
-#else
-#define printf(...)
-#endif
+
+    virtual void init(void);
+    virtual void close(void);
+    virtual s16  getRC(u8 ch);
+    virtual s16 *getRCs(void);
+    virtual u8   getChCnt(void);
+
+private:
+};
+
 #endif
