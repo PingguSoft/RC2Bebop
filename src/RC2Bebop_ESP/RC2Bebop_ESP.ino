@@ -20,7 +20,7 @@ enum {
 #define DISCOVERY_PORT      44444
 #define NAV_SERVER_PORT     52000
 
-static SerialProtocol   mSerial;
+//static SerialProtocol   mSerial;
 static WiFiClient       mBebopDiscoveryClient;
 static Commands         mControl;
 static NavServer        mNavServer(NAV_SERVER_PORT);
@@ -38,8 +38,8 @@ static s8 aux2 = 0;
 static s8 aux3 = 0;
 static s8 aux4 = 0;
 
-static StatusLED    mLED(mSerial);
-static Sound        mSound(mSerial);
+//static StatusLED    mLED(mSerial);
+//static Sound        mSound(mSerial);
 
 static void WiFiEvent(WiFiEvent_t event) {
     Utils::printf("[WiFi-event] event: %d\n", event);
@@ -168,7 +168,7 @@ static bool bebop_connectDiscovery(void)
     IPAddress hostIP = WiFi.localIP();
     hostIP[3] = 1;
 
-    WiFi.removeEvent(WiFiEvent);
+//    WiFi.removeEvent(WiFiEvent);
     Utils::printf("bebop_connectDiscovery : %s, %d\n", hostIP.toString().c_str(), DISCOVERY_PORT);
     if (!mBebopDiscoveryClient.connect(hostIP, DISCOVERY_PORT)) {
         Utils::printf("Connection Failed !!!\n");
@@ -260,14 +260,14 @@ static u32 serialCallback(u8 cmd, u8 *data, u8 size)
 #define DUR_8   (1000 / 8)
 
 void setup() {
-    Serial.begin(57600);
+    Serial.begin(115200);
 
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     delay(500);
 
-    mSerial.setCallback(serialCallback);
-    mLED.set(StatusLED::LED_GREEN, 300);
+//    mSerial.setCallback(serialCallback);
+//    mLED.set(StatusLED::LED_GREEN, 300);
 }
 
 void loop()
@@ -297,7 +297,7 @@ void loop()
         case STATE_CONFIG:
             if (mControl.config()) {
                 mNextState = STATE_WORK;
-                mLED.set(StatusLED::LED_GREEN, 0);
+//                mLED.set(StatusLED::LED_GREEN, 0);
             }
             size = mNavServer.process(dataAck);
             if (size > 0)
@@ -313,14 +313,14 @@ void loop()
 
     u8 batt = mNavServer.getBatt();
     if (!mBattWarn && batt != 0 && batt < 20) {
-        mLED.set(StatusLED::LED_PURPLE, 50);
+//        mLED.set(StatusLED::LED_PURPLE, 50);
 
         const u16 noteSiren[] = { 630, DUR_2, 315, DUR_2, 0xffff, 0xffff };
-        mSound.play((u16*)noteSiren, sizeof(noteSiren));
+//        mSound.play((u16*)noteSiren, sizeof(noteSiren));
         mBattWarn = true;
     }
 
-    mSerial.handleRX();
-    mLED.process();
+//    mSerial.handleRX();
+//    mLED.process();
 }
 

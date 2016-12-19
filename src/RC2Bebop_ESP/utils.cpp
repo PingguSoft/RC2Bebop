@@ -49,7 +49,7 @@ void Utils::dump(u8 *data, u16 cnt)
 
 void Utils::printf(char *fmt, ... )
 {
-#if 0
+#if 1
     char buf[256];
     va_list args;
 
