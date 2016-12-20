@@ -44,4 +44,31 @@ typedef uint64_t u64;
 #define FALSE   0
 #endif
 
+#define PPM_MIN_VALUE   1000
+#define PPM_MAX_VALUE   2000
+
+#define CHAN_MIN_VALUE -512
+#define CHAN_MID_VALUE  0
+#define CHAN_MAX_VALUE  512
+
+enum {
+    CH_THROTTLE = 0,
+    CH_RUDDER,
+    CH_ELEVATOR,
+    CH_AILERON,
+    CH_AUX1,
+    CH_AUX2,
+    CH_AUX3,
+    CH_AUX4,
+    CH_AUX5,
+    CH_AUX6,
+    CH_AUX7,
+    CH_AUX8,
+    CH_AUX9,
+    CH_AUX10,
+    CH_AUX11,
+    CH_AUX12,
+    MAX_CHANNEL
+};
+
 #endif

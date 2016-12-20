@@ -21,9 +21,25 @@
 #include "Utils.h"
 
 // Bit vector from bit position
-#define BV(bit) (1 << (bit))
+#define BV(bit)             (1 << (bit))
+#define BIT_SET(v, bit)     v |= BV(bit)
+#define BIT_CLR(v, bit)     v &= ~BV(bit)
+#define BIT_IS_SET(v, bit)  (v & BV(0))
+#define BIT_IS_CLR(v, bit)  (!(v & BV(0)))
 
-#define PRINT_FUNC  Utils::printf("-------------------------> %s\n", __func__)
+#define __DEBUG__   1
+
+#if __DEBUG__
+    #define LOG                 Utils::printf
+    #define DUMP(data, cnt)     Utils::dump("DUMP", data, cnt)
+    #define __PRINT_FUNC__      Utils::printf("%08ld : %s\n", millis(), __PRETTY_FUNCTION__);
+#else
+    #define LOG(...)
+    #define DUMP(...)
+    #define __PRINT_FUNC__
+#endif
+
+#define PRINT_FUNC  LOG("-------------------------> %s\n", __func__)
 
 class Utils
 {

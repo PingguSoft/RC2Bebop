@@ -4,9 +4,11 @@
 #include "Commands.h"
 #include "NavServer.h"
 #include "ByteBuffer.h"
-#include "SerialProtocol.h"
-#include "StatusLED.h"
-#include "Sound.h"
+#include "RCRcvrPPM.h"
+#include "Telemetry.h"
+
+#define FLAG_TAKE_OFF       0
+#define FLAG_VIDEO_REC      1
 
 enum {
     STATE_INIT = 0,
@@ -20,43 +22,35 @@ enum {
 #define DISCOVERY_PORT      44444
 #define NAV_SERVER_PORT     52000
 
-//static SerialProtocol   mSerial;
 static WiFiClient       mBebopDiscoveryClient;
 static Commands         mControl;
 static NavServer        mNavServer(NAV_SERVER_PORT);
 static u8               mNextState = STATE_INIT;
-static bool             mBattWarn = false;
+static RCRcvr          *mRcvr = NULL;
 
-static u8 dataAck[1024];
-static u8 recVideo = 0;
-static s8 speed = 0;
-static s8 roll = 0;
-static s8 pitch = 0;
-static s8 yaw = 0;
-static s8 aux1 = 0;
-static s8 aux2 = 0;
-static s8 aux3 = 0;
-static s8 aux4 = 0;
+static u8  dataAck[1024];
+static u8  recVideo = 0;
+static s8  speed = 0;
+static s8  roll = 0;
+static s8  pitch = 0;
+static s8  yaw = 0;
+static s8  aux1 = 0;
+static s8  aux2 = 0;
+static s8  aux3 = 0;
+static s8  aux4 = 0;
+static u32 mFlag = 0;
 
-//static StatusLED    mLED(mSerial);
-//static Sound        mSound(mSerial);
+static void eventGotIP(const WiFiEventStationModeGotIP& event)
+{
+    LOG("WiFi connected");
+    LOG("IP address: %s\n", WiFi.localIP().toString().c_str());
+    mNextState = STATE_DISCOVERY;
+}
 
-static void WiFiEvent(WiFiEvent_t event) {
-    Utils::printf("[WiFi-event] event: %d\n", event);
-
-    switch(event) {
-        case WIFI_EVENT_STAMODE_GOT_IP:
-            Serial.println("WiFi connected");
-            Utils::printf("IP address: %s\n", WiFi.localIP().toString().c_str());
-            mNextState = STATE_DISCOVERY;
-            break;
-
-
-        case WIFI_EVENT_STAMODE_DISCONNECTED:
-            Utils::printf("WiFi lost connection\n");
-            mNextState = STATE_INIT;
-            break;
-    }
+static void eventDisconnected(const WiFiEventStationModeDisconnected& event)
+{
+    LOG("WiFi lost connection\n");
+    mNextState = STATE_INIT;
 }
 
 static void handleKey(void)
@@ -66,7 +60,7 @@ static void handleKey(void)
     size = Serial.available();
     while(size--) {
         u8 ch = Serial.read();
-        Utils::printf("***** : %c\n", ch);
+        LOG("***** : %c\n", ch);
 
         switch (ch) {
             case 'p' : mControl.takePicture();                                  break;
@@ -77,42 +71,42 @@ static void handleKey(void)
 
             case 's' :
                 speed += (speed < 90) ? 10 : 0;
-                Utils::printf("thr : %d\n", speed);
+                LOG("thr : %d\n", speed);
                 break;
 
             case 'x' :
                 speed += (speed > -90) ? -10 : 0;
-                Utils::printf("thr : %d\n", speed);
+                LOG("thr : %d\n", speed);
                 break;
 
             case 'i' :
                 pitch += (pitch < 90) ? 10 : 0;
-                Utils::printf("pitch : %d\n", pitch);
+                LOG("pitch : %d\n", pitch);
                 break;
 
             case 'k' :
                 pitch += (pitch > -90) ? -10 : 0;
-                Utils::printf("pitch : %d\n", pitch);
+                LOG("pitch : %d\n", pitch);
                 break;
 
             case 'j' :
                 roll += (roll > -90) ? -10 : 0;
-                Utils::printf("roll : %d\n", roll);
+                LOG("roll : %d\n", roll);
                 break;
 
             case 'l' :
                 roll += (roll < 90) ? 10 : 0;
-                Utils::printf("roll : %d\n", roll);
+                LOG("roll : %d\n", roll);
                 break;
 
             case 'u' :
                 yaw += (yaw > -90) ? -10 : 0;
-                Utils::printf("yaw : %d\n", yaw);
+                LOG("yaw : %d\n", yaw);
                 break;
 
             case 'o' :
                 yaw += (yaw < 90) ? 10 : 0;
-                Utils::printf("yaw : %d\n", yaw);
+                LOG("yaw : %d\n", yaw);
                 break;
 
             case ' ' :
@@ -120,7 +114,7 @@ static void handleKey(void)
                 roll = 0;
                 pitch = 0;
                 speed = 0;
-                Utils::printf("reset pos\n");
+                LOG("reset pos\n");
                 break;
 
             case 'r':
@@ -147,15 +141,16 @@ static bool bebop_scanAndConnect(void)
 
     int n = WiFi.scanNetworks();
     if (n == 0) {
-        Utils::printf("no networks found\n");
+        LOG("no networks found\n");
     } else {
-        Utils::printf("%d networks found\n", n);
+        LOG("%d networks found\n", n);
         for (int i = 0; i < n; i++) {
-            Utils::printf("%d : %s (%d) %d\n", i + 1, WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.encryptionType(i));
+            LOG("%d : %s (%d) %d\n", i + 1, WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.encryptionType(i));
             if (!strncmp(WiFi.SSID(i).c_str(), "BebopDrone", 10)) {
-                WiFi.onEvent(WiFiEvent);
+                LOG("Connect to BebopDrone !!!\n");
                 WiFi.begin(WiFi.SSID(i).c_str(), "");
-                Utils::printf("Connect to BebopDrone !!!\n");
+                WiFi.onStationModeGotIP(eventGotIP);
+                WiFi.onStationModeDisconnected(eventDisconnected);
                 return true;
             }
         }
@@ -169,13 +164,13 @@ static bool bebop_connectDiscovery(void)
     hostIP[3] = 1;
 
 //    WiFi.removeEvent(WiFiEvent);
-    Utils::printf("bebop_connectDiscovery : %s, %d\n", hostIP.toString().c_str(), DISCOVERY_PORT);
+    LOG("bebop_connectDiscovery : %s, %d\n", hostIP.toString().c_str(), DISCOVERY_PORT);
     if (!mBebopDiscoveryClient.connect(hostIP, DISCOVERY_PORT)) {
-        Utils::printf("Connection Failed !!!\n");
+        LOG("Connection Failed !!!\n");
     } else {
         char req[200];
         sprintf(req,"{\"d2c_port\":%d, \"controller_name\":\"UniConTX\", \"controller_type\":\"computer\"}", NAV_SERVER_PORT);
-        Utils::printf("to bebop : %s\n", req);
+        LOG("to bebop : %s\n", req);
         mBebopDiscoveryClient.print(req);
         mBebopDiscoveryClient.flush();
         return true;
@@ -189,11 +184,11 @@ static bool bebop_handleDiscovery(void)
     u8      buf[256];
     char    sv[20];
 
-    Utils::printf("Waiting response !!!\n");
+    LOG("Waiting response !!!\n");
     while (mBebopDiscoveryClient.available()) {
         int len = mBebopDiscoveryClient.read(buf, 256);
         if (len > 0) {
-            Utils::printf("%d %s\n", len, (char*)buf);
+            LOG("%d %s\n", len, (char*)buf);
             //{ "status": 0, "c2d_port": 54321, "arstream_fragment_size": 65000, "arstream_fragment_maximum_number": 4, "arstream_max_ack_interval": -1, "c2d_update_port": 51, "c2d_user_port": 21 }
 
             char *ptr = strstr((char*)buf, "\"c2d_port\":");
@@ -205,7 +200,7 @@ static bool bebop_handleDiscovery(void)
                 strncpy(szPort, ptr, comma - ptr);
                 szPort[comma - ptr] = 0;
                 int port = atoi(szPort);
-                Utils::printf("dev command (c2d_port):%d !!\n", port);
+                LOG("dev command (c2d_port):%d !!\n", port);
                 mControl.setDest(mBebopDiscoveryClient.remoteIP(), port);
                 mBebopDiscoveryClient.stop();
             }
@@ -215,65 +210,32 @@ static bool bebop_handleDiscovery(void)
     return false;
 }
 
-static s16 map(s16 v)
-{
-    return (-5 <= v && v <= 5) ? 0 : v;
-}
-
-static u32 serialCallback(u8 cmd, u8 *data, u8 size)
-{
-    u8 flag = 0;
-    u32 ret = 0;
-    ByteBuffer bb(data, size);
-
-    switch (cmd) {
-        case SerialProtocol::CMD_SET_RC:
-            speed = map((s16)bb.get16());
-            yaw   = map((s16)bb.get16());
-            pitch = map((s16)bb.get16());
-            roll  = map((s16)bb.get16());
-            aux1  = map((s16)bb.get16());
-            aux2  = map((s16)bb.get16());
-            aux3  = map((s16)bb.get16());
-            aux4  = map((s16)bb.get16());
-
-//            Utils::printf("%3d %3d %3d %3d %3d %3d %3d %3d\n", speed, yaw, pitch, roll, aux1, aux2, aux3, aux4);
-#if 1
-            if (aux1 >= 50)
-                mControl.takeOff();
-            else if (aux1 < 50)
-                mControl.land();
-
-            if (roll != 0 || pitch != 0)
-                flag = 1;
-
-            mControl.move(flag, roll, pitch, yaw, speed);
-#endif
-            break;
-    }
-    return ret;
-}
-
-
-#define DUR_2   (1000 / 2)
-#define DUR_4   (1000 / 4)
-#define DUR_8   (1000 / 8)
-
 void setup() {
+    Serial1.begin(100000, SERIAL_8E2);
     Serial.begin(115200);
 
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     delay(500);
 
-//    mSerial.setCallback(serialCallback);
-//    mLED.set(StatusLED::LED_GREEN, 300);
+    mRcvr = new RCRcvrPPM();
+    mRcvr->init();
 }
+
+#define AUX_SW_ON   50  //(CHAN_MID_VALUE + CHAN_MAX_VALUE / 2)
 
 void loop()
 {
     int  size;
 
+#if 0
+    if (mRcvr) {
+        LOG("T:%4d R:%4d E:%4d A:%4d %4d %4d %4d %4d [%4d %4d]\n", mRcvr->getRC(0), mRcvr->getRC(1), mRcvr->getRC(2), mRcvr->getRC(3), mRcvr->getRC(4),
+            mRcvr->getRC(5), mRcvr->getRC(6), mRcvr->getRC(7), mRcvr->getRC(8), mRcvr->getRC(9), mRcvr->getRC(10));
+    }
+#endif
+
+#if 1
     switch (mNextState) {
         case STATE_INIT:
             if (bebop_scanAndConnect()) {
@@ -297,7 +259,6 @@ void loop()
         case STATE_CONFIG:
             if (mControl.config()) {
                 mNextState = STATE_WORK;
-//                mLED.set(StatusLED::LED_GREEN, 0);
             }
             size = mNavServer.process(dataAck);
             if (size > 0)
@@ -305,22 +266,50 @@ void loop()
             break;
 
         case STATE_WORK:
+#if 0
+            if (mRcvr) {
+                u8  flag = 0;
+
+                roll  = mRcvr->getRC(CH_AILERON,  -100, 100);
+                pitch = mRcvr->getRC(CH_ELEVATOR, -100, 100);
+                yaw   = mRcvr->getRC(CH_RUDDER,   -100, 100);
+                speed = mRcvr->getRC(CH_THROTTLE, -100, 100);
+                aux1  = mRcvr->getRC(CH_AUX1,     -100, 100);
+                aux2  = mRcvr->getRC(CH_AUX2,     -100, 100);
+                aux3  = mRcvr->getRC(CH_AUX3,     -100, 100);
+                aux4  = mRcvr->getRC(CH_AUX4,     -100, 100);
+
+                if (BIT_IS_CLR(mFlag, FLAG_TAKE_OFF) && aux1 >= AUX_SW_ON) {
+                    BIT_SET(mFlag, FLAG_TAKE_OFF);
+                    mControl.takeOff();
+                } else if (BIT_IS_SET(mFlag, FLAG_TAKE_OFF) && aux1 < AUX_SW_ON) {
+                    BIT_CLR(mFlag, FLAG_TAKE_OFF);
+                    mControl.land();
+                }
+
+                if (BIT_IS_CLR(mFlag, FLAG_VIDEO_REC) && aux2 >= AUX_SW_ON) {
+                    BIT_SET(mFlag, FLAG_VIDEO_REC);
+                    mControl.recordVideo(TRUE);
+                } else if (BIT_IS_SET(mFlag, FLAG_VIDEO_REC) && aux2 < AUX_SW_ON) {
+                    BIT_CLR(mFlag, FLAG_VIDEO_REC);
+                    mControl.recordVideo(FALSE);
+                }
+
+                if (roll != 0 || pitch != 0)
+                    flag = 1;
+
+                mControl.move(flag, roll, pitch, yaw, speed);
+
+//                LOG("T:%4d R:%4d E:%4d A:%4d %4d %4d %4d %4d [%4d %4d]\n", mRcvr->getRC(0), mRcvr->getRC(1), mRcvr->getRC(2), mRcvr->getRC(3), mRcvr->getRC(4),
+//                    mRcvr->getRC(5), mRcvr->getRC(6), mRcvr->getRC(7), mRcvr->getRC(8), mRcvr->getRC(9), mRcvr->getRC(10));
+            }
+#endif
             size = mNavServer.process(dataAck);
             mControl.process(dataAck, size);
             break;
     }
 //    handleKey();
-
-    u8 batt = mNavServer.getBatt();
-    if (!mBattWarn && batt != 0 && batt < 20) {
-//        mLED.set(StatusLED::LED_PURPLE, 50);
-
-        const u16 noteSiren[] = { 630, DUR_2, 315, DUR_2, 0xffff, 0xffff };
-//        mSound.play((u16*)noteSiren, sizeof(noteSiren));
-        mBattWarn = true;
-    }
-
-//    mSerial.handleRX();
-//    mLED.process();
+//    u8 batt = mNavServer.getBatt();
+#endif
 }
 
