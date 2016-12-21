@@ -24,9 +24,10 @@ enum {
 
 static WiFiClient       mBebopDiscoveryClient;
 static Commands         mControl;
-static NavServer        mNavServer(NAV_SERVER_PORT);
+static Telemetry        mTM;
+static NavServer        mNavServer(NAV_SERVER_PORT, &mTM);
 static u8               mNextState = STATE_INIT;
-static RCRcvr          *mRcvr = NULL;
+static RCRcvrPPM        mRcvr;
 
 static u8  dataAck[1024];
 static u8  recVideo = 0;
@@ -39,19 +40,6 @@ static s8  aux2 = 0;
 static s8  aux3 = 0;
 static s8  aux4 = 0;
 static u32 mFlag = 0;
-
-static void eventGotIP(const WiFiEventStationModeGotIP& event)
-{
-    LOG("WiFi connected");
-    LOG("IP address: %s\n", WiFi.localIP().toString().c_str());
-    mNextState = STATE_DISCOVERY;
-}
-
-static void eventDisconnected(const WiFiEventStationModeDisconnected& event)
-{
-    LOG("WiFi lost connection\n");
-    mNextState = STATE_INIT;
-}
 
 static void handleKey(void)
 {
@@ -120,6 +108,12 @@ static void handleKey(void)
             case 'r':
                 mNextState = STATE_INIT;
                 break;
+
+            case 't':
+                mTM.setVolt(0, 100, 10);
+                mTM.setVolt(1, 90, 10);
+                mTM.setVolt(2, 80, 10);
+                break;
         }
     }
     u8 flag = 0;
@@ -128,8 +122,28 @@ static void handleKey(void)
     mControl.move(flag, roll, pitch, yaw, speed);
 }
 
+static void WiFiEvent(WiFiEvent_t event) {
+    Utils::printf("[WiFi-event] event: %d\n", event);
+
+    switch(event) {
+        case WIFI_EVENT_STAMODE_GOT_IP:
+            Serial.println("WiFi connected");
+            Utils::printf("IP address: %s\n", WiFi.localIP().toString().c_str());
+            mNextState = STATE_DISCOVERY;
+            break;
+
+        case WIFI_EVENT_STAMODE_DISCONNECTED:
+            Utils::printf("WiFi lost connection\n");
+            mNextState = STATE_INIT;
+            break;
+    }
+}
+
 static bool bebop_scanAndConnect(void)
 {
+    if (mNextState != STATE_INIT)
+        return false;
+
     if (WiFi.isConnected()) {
         if (!strncmp(WiFi.SSID().c_str(), "BebopDrone", 10)) {
             mNextState = STATE_DISCOVERY;
@@ -143,14 +157,15 @@ static bool bebop_scanAndConnect(void)
     if (n == 0) {
         LOG("no networks found\n");
     } else {
-        LOG("%d networks found\n", n);
+        LOG("\n\n%d networks found\n", n);
         for (int i = 0; i < n; i++) {
             LOG("%d : %s (%d) %d\n", i + 1, WiFi.SSID(i).c_str(), WiFi.RSSI(i), WiFi.encryptionType(i));
             if (!strncmp(WiFi.SSID(i).c_str(), "BebopDrone", 10)) {
                 LOG("Connect to BebopDrone !!!\n");
+                mNextState = STATE_AP_CONNECT;
+
                 WiFi.begin(WiFi.SSID(i).c_str(), "");
-                WiFi.onStationModeGotIP(eventGotIP);
-                WiFi.onStationModeDisconnected(eventDisconnected);
+                WiFi.onEvent(WiFiEvent);
                 return true;
             }
         }
@@ -200,8 +215,12 @@ static bool bebop_handleDiscovery(void)
                 strncpy(szPort, ptr, comma - ptr);
                 szPort[comma - ptr] = 0;
                 int port = atoi(szPort);
-                LOG("dev command (c2d_port):%d !!\n", port);
-                mControl.setDest(mBebopDiscoveryClient.remoteIP(), port);
+
+                IPAddress hostIP = WiFi.localIP();
+                hostIP[3] = 1;
+
+                LOG("dev command to %s (c2d_port):%d !!\n", hostIP.toString().c_str() , port);
+                mControl.setDest(hostIP, port);
                 mBebopDiscoveryClient.stop();
             }
             return true;
@@ -211,15 +230,13 @@ static bool bebop_handleDiscovery(void)
 }
 
 void setup() {
-    Serial1.begin(100000, SERIAL_8E2);
+    Serial1.begin(115200);
     Serial.begin(115200);
 
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
+    WiFi.persistent(false);
     delay(500);
-
-    mRcvr = new RCRcvrPPM();
-    mRcvr->init();
 }
 
 #define AUX_SW_ON   50  //(CHAN_MID_VALUE + CHAN_MAX_VALUE / 2)
@@ -227,13 +244,6 @@ void setup() {
 void loop()
 {
     int  size;
-
-#if 0
-    if (mRcvr) {
-        LOG("T:%4d R:%4d E:%4d A:%4d %4d %4d %4d %4d [%4d %4d]\n", mRcvr->getRC(0), mRcvr->getRC(1), mRcvr->getRC(2), mRcvr->getRC(3), mRcvr->getRC(4),
-            mRcvr->getRC(5), mRcvr->getRC(6), mRcvr->getRC(7), mRcvr->getRC(8), mRcvr->getRC(9), mRcvr->getRC(10));
-    }
-#endif
 
 #if 1
     switch (mNextState) {
@@ -258,6 +268,7 @@ void loop()
 
         case STATE_CONFIG:
             if (mControl.config()) {
+                mRcvr.init();
                 mNextState = STATE_WORK;
             }
             size = mNavServer.process(dataAck);
@@ -266,18 +277,17 @@ void loop()
             break;
 
         case STATE_WORK:
-#if 0
-            if (mRcvr) {
+            {
                 u8  flag = 0;
 
-                roll  = mRcvr->getRC(CH_AILERON,  -100, 100);
-                pitch = mRcvr->getRC(CH_ELEVATOR, -100, 100);
-                yaw   = mRcvr->getRC(CH_RUDDER,   -100, 100);
-                speed = mRcvr->getRC(CH_THROTTLE, -100, 100);
-                aux1  = mRcvr->getRC(CH_AUX1,     -100, 100);
-                aux2  = mRcvr->getRC(CH_AUX2,     -100, 100);
-                aux3  = mRcvr->getRC(CH_AUX3,     -100, 100);
-                aux4  = mRcvr->getRC(CH_AUX4,     -100, 100);
+                roll  = mRcvr.getRC(CH_AILERON,  -100, 100);
+                pitch = mRcvr.getRC(CH_ELEVATOR, -100, 100);
+                yaw   = mRcvr.getRC(CH_RUDDER,   -100, 100);
+                speed = mRcvr.getRC(CH_THROTTLE, -100, 100);
+                aux1  = mRcvr.getRC(CH_AUX1,     -100, 100);
+                aux2  = mRcvr.getRC(CH_AUX2,     -100, 100);
+                aux3  = mRcvr.getRC(CH_AUX3,     -100, 100);
+                aux4  = mRcvr.getRC(CH_AUX4,     -100, 100);
 
                 if (BIT_IS_CLR(mFlag, FLAG_TAKE_OFF) && aux1 >= AUX_SW_ON) {
                     BIT_SET(mFlag, FLAG_TAKE_OFF);
@@ -300,16 +310,14 @@ void loop()
 
                 mControl.move(flag, roll, pitch, yaw, speed);
 
-//                LOG("T:%4d R:%4d E:%4d A:%4d %4d %4d %4d %4d [%4d %4d]\n", mRcvr->getRC(0), mRcvr->getRC(1), mRcvr->getRC(2), mRcvr->getRC(3), mRcvr->getRC(4),
-//                    mRcvr->getRC(5), mRcvr->getRC(6), mRcvr->getRC(7), mRcvr->getRC(8), mRcvr->getRC(9), mRcvr->getRC(10));
+//                LOG("T:%4d R:%4d E:%4d A:%4d %4d %4d %4d %4d [%4d %4d]\n", mRcvr.getRC(0), mRcvr.getRC(1), mRcvr.getRC(2), mRcvr.getRC(3), mRcvr.getRC(4),
+//                    mRcvr.getRC(5), mRcvr.getRC(6), mRcvr.getRC(7), mRcvr.getRC(8), mRcvr.getRC(9), mRcvr.getRC(10));
             }
-#endif
             size = mNavServer.process(dataAck);
             mControl.process(dataAck, size);
+            mTM.update();
             break;
     }
-//    handleKey();
-//    u8 batt = mNavServer.getBatt();
 #endif
 }
 

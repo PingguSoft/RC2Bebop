@@ -82,22 +82,23 @@ u8 Telemetry::buildAltInfo(u8 *buf)
     return 18;
 }
 
-//0 [00] 0x0A
-//1 [01] 00
-//2 [02] V1 MSB (Hex)
-//3 [03] V1 LSB (Hex) //In 0.01V
-//4 [04] V2 MSB (Hex)
-//5 [05] V2 LSB (Hex) //In 0.01V
-//6 [06] Cap1 MSB (Hex)
-//7 [07] Cap1 LSB (Hex) //In 1mAh
-//8 [08] Cap2 MSB (Hex)
-//9 [09] Cap2 LSB (Hex) //In 1mAh
+// 0 [00] 0x0A
+// 1 [01] 00
+// 2 [02] V1 MSB (Hex)
+// 3 [03] V1 LSB (Hex) //In 0.01V
+// 4 [04] V2 MSB (Hex)
+// 5 [05] V2 LSB (Hex) //In 0.01V
+// 6 [06] Cap1 MSB (Hex)
+// 7 [07] Cap1 LSB (Hex) //In 1mAh
+// 8 [08] Cap2 MSB (Hex)
+// 9 [09] Cap2 LSB (Hex) //In 1mAh
 //10 [0A] 00
 //11 [0B] 00
 //12 [0C] 00
 //13 [0D] 00
 //14 [0E] 00
 //15 [0F] Alarm // The fist bit is alarm V1, the second V2, the third Capacity 1, the 4th capacity 2.
+
 u8 Telemetry::buildPowerInfo(u8 *buf)
 {
     u8  idx = 0;
@@ -212,11 +213,11 @@ u8 Telemetry::buildTMInfo(u8 *buf)
 
 void Telemetry::frameDSM(u8 rssi, u8 *buf, u8 size)
 {
-#if 0
-    Serial3.write(0xAA);
-    Serial3.write(rssi);
+#if 1
+    Serial1.write(0xAA);
+    Serial1.write(rssi);
     for (u8 i = 0; i < size; i++)
-        Serial3.write(buf[i]);
+        Serial1.write(buf[i]);
 #endif
 }
 
@@ -226,21 +227,21 @@ void Telemetry::update(void)
     u8 rssi;
 
     if (isMasked(MASK_RSSI)) {
-        rssi = constrain(getRSSI(), 0, 0x1f);
+        rssi = getRSSI() >> 8;
     } else {
         rssi = 0x1f;
     }
 
     if (isMasked(MASK_VOLT)) {
-//        LOG(F("VOLT - V1:%d, V2:%d, V3:%d\n"), mVolt[0], mVolt[1], mVolt[2]);
+        LOG("VOLT - V1:%d, V2:%d, V3:%d\n", mVolt[0], mVolt[1], mVolt[2]);
         size = buildPowerInfo(mTeleBuf);
         frameDSM(rssi, mTeleBuf, size);
         clearMask(MASK_VOLT);
     }
 
     if (isMasked(MASK_TEMP | MASK_RPM)) {
-//        LOG(F("RPM  - R1:%d, R2:%d, R3:%d\n"), mRPM[0], mRPM[1], mRPM[2]);
-//        LOG(F("TEMP - T1:%d, T2:%d, T3:%d, T4:%d\n"), mTemp[0], mTemp[1], mTemp[2], mTemp[3]);
+        LOG("RPM  - R1:%d, R2:%d, R3:%d\n", mRPM[0], mRPM[1], mRPM[2]);
+        LOG("TEMP - T1:%d, T2:%d, T3:%d, T4:%d\n", mTemp[0], mTemp[1], mTemp[2], mTemp[3]);
         size = buildTMInfo(mTeleBuf);
         frameDSM(rssi, mTeleBuf, size);
         clearMask(MASK_TEMP | MASK_RPM);

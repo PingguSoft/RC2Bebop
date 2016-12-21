@@ -12,9 +12,6 @@
  GNU General Public License for more details.
  see <http://www.gnu.org/licenses/>
 */
-
-#include <SPI.h>
-
 #include "common.h"
 #include "utils.h"
 #include "RCRcvrPPM.h"

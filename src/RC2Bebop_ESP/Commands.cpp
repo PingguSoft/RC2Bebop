@@ -81,7 +81,7 @@ void Commands::recordVideo(u8 enable, u8 storage)
 void Commands::setDate(void)
 {
     PRINT_FUNC;
-    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 1, "2016-04-21");
+    int size = Bebop::buildCmd(mBuf, FRAME_TYPE_DATA, BUFFER_ID_C2D_NONACK, "BBHS", PROJECT_COMMON, COMMON_CLASS_COMMON, 1, "2016-12-21");
     sendto(mBuf, size);
 }
 

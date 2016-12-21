@@ -24,6 +24,7 @@ NavServer::NavServer()
     mPort       = 0;
     mNextState  = STATE_HEADER;
     mPayloadLen = 0;
+    mTM         = NULL;
 }
 
 NavServer::NavServer(int port)
@@ -31,6 +32,15 @@ NavServer::NavServer(int port)
     mPort       = port;
     mNextState  = STATE_HEADER;
     mPayloadLen = 0;
+    mTM         = NULL;
+}
+
+NavServer::NavServer(int port, Telemetry *tm)
+{
+    mPort       = port;
+    mNextState  = STATE_HEADER;
+    mPayloadLen = 0;
+    mTM         = tm;
 }
 
 NavServer::~NavServer()
@@ -129,7 +139,11 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
             cmd   = GET_CMD(cmdID);
 
             if (cmdID == PACK_CMD(PROJECT_COMMON, COMMON_CLASS_COMMONSTATE, 7)) {
-                LOG(">> RSSI         : %5d\n", ba.get16());
+                u16 rssi = ba.get16();
+                LOG(">> RSSI         : %5d\n", rssi);
+                if (mTM) {
+                    mTM->setRSSI(rssi);
+                }
             } else if (cmdID == PACK_CMD(PROJECT_ARDRONE3, ARDRONE3_CLASS_CAMERASTATE, 0)) {
                 LOG(">> CAM          : %d %d\n", ba.get8(), ba.get8());
             } else if (GET_PRJ_CLS(cmdID) == PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTINGSTATE)) {
@@ -150,7 +164,11 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                         break;
 
                     case 8:
-                        LOG(">> ALT          : %s\n", Utils::dtoa(buf, ba.getdouble()));
+                        double alt = ba.getdouble();
+                        if (mTM) {
+                            mTM->setBaroAlt(alt * 10);
+                        }
+                        LOG(">> ALT          : %s\n", Utils::dtoa(buf, alt));
                         break;
                 }
             } else {
@@ -203,6 +221,9 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                         case 1:
                             mBatt = ba.get8();
                             LOG(">> Battery      : %d\n", mBatt);
+                            if (mTM) {
+                                mTM->setVolt(0, mBatt * 126, 1000);
+                            }
                             break;
 
                         case 4:

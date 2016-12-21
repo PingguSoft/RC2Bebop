@@ -17,6 +17,7 @@
 #include <WiFiUdp.h>
 #include "Common.h"
 #include "Bebop.h"
+#include "Telemetry.h"
 
 class NavServer
 {
@@ -29,6 +30,7 @@ public:
 
     NavServer();
     NavServer(int port);
+    NavServer(int port, Telemetry *tm);
     ~NavServer();
 
     void setPort(int port) { mPort = port; }
@@ -45,10 +47,13 @@ public:
 protected:
     int parseFrame(u8 *data, u32 size, u8 *dataAck);
 
+    Telemetry   *mTM;
+
     WiFiUDP mUDP;
     int mPort;
 
-    u8  mBuffer[1124];
+//    u8  mBuffer[1124];
+    u8  mBuffer[1500];
     u8  mNextState;
 
     u8  mFrameType;
@@ -59,7 +64,7 @@ protected:
     u16 mVidFrameNo;
     u64 mAckLow;
     u64 mAckHigh;
-    
+
     u8  mBatt;
 };
 

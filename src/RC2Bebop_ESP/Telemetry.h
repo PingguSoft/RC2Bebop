@@ -76,6 +76,6 @@ private:
     u16         mBattCap;
     struct gps  mGPS;
 
-    u8          mTeleBuf[20];
+    u8          mTeleBuf[30];
 };
 #endif
