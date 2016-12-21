@@ -41,6 +41,10 @@ static s8  aux3 = 0;
 static s8  aux4 = 0;
 static u32 mFlag = 0;
 
+static s16 alt  = 0;
+static s16 rssi = 256;
+static s16 mv = 0;
+
 static void handleKey(void)
 {
     int size;
@@ -51,6 +55,7 @@ static void handleKey(void)
         LOG("***** : %c\n", ch);
 
         switch (ch) {
+#if 0
             case 'p' : mControl.takePicture();                                  break;
             case 'v' : recVideo = !recVideo;    mControl.recordVideo(recVideo); break;
 
@@ -108,11 +113,24 @@ static void handleKey(void)
             case 'r':
                 mNextState = STATE_INIT;
                 break;
+#endif
 
             case 't':
-                mTM.setVolt(0, 100, 10);
-                mTM.setVolt(1, 90, 10);
-                mTM.setVolt(2, 80, 10);
+                mv += 100;
+                LOG("volt:%d mV\n", mv);
+                mTM.setVolt(0, mv);
+                break;
+
+            case 'a':
+                alt += 10;
+                LOG("alt:%d\n", alt);
+                mTM.setBaroAlt(alt);
+                break;
+
+            case 'r':
+                rssi ++;
+                LOG("rssi:%d\n", rssi);
+                mTM.setRSSI(rssi);
                 break;
         }
     }
@@ -245,7 +263,10 @@ void loop()
 {
     int  size;
 
-#if 1
+    handleKey();
+    mTM.update();
+
+#if 0
     switch (mNextState) {
         case STATE_INIT:
             if (bebop_scanAndConnect()) {

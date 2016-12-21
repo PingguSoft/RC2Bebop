@@ -142,7 +142,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                 u16 rssi = ba.get16();
                 LOG(">> RSSI         : %5d\n", rssi);
                 if (mTM) {
-                    mTM->setRSSI(rssi);
+                    mTM->setRSSI(rssi >> 8);
                 }
             } else if (cmdID == PACK_CMD(PROJECT_ARDRONE3, ARDRONE3_CLASS_CAMERASTATE, 0)) {
                 LOG(">> CAM          : %d %d\n", ba.get8(), ba.get8());
@@ -222,7 +222,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
                             mBatt = ba.get8();
                             LOG(">> Battery      : %d\n", mBatt);
                             if (mTM) {
-                                mTM->setVolt(0, mBatt * 126, 1000);
+                                mTM->setVolt(0, mBatt * 126 / 100);
                             }
                             break;
 

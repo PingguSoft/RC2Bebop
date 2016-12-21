@@ -28,8 +28,8 @@ public:
         u8  satcount;
     };
 
-    inline void setVolt(u8 idx, u16 val, u16 div)   { mUpdateMask |= MASK_VOLT; mVolt[idx] = val * 100 / div; }
-    inline u16  getVolt(u8 idx)                     { return mVolt[idx];                                      }
+    inline void setVolt(u8 idx, u16 mV)             { mUpdateMask |= MASK_VOLT; mVolt[idx] = mV;   }
+    inline u16  getVolt(u8 idx)                     { return mVolt[idx];                           }
 
     inline void setTemp(u8 idx, u16 val)            { mUpdateMask |= MASK_TEMP;  mTemp[idx] = val; }
     inline u16  getTemp(u8 idx)                     { return mTemp[idx];}
@@ -37,10 +37,10 @@ public:
     inline void setRPM(u8 idx, u16 val)             { mUpdateMask |= MASK_RPM;   mRPM[idx] = val;  }
     inline u16  getRPM(u8 idx)                      { return mRPM[idx]; }
 
-    inline void setRSSI(u16 val)                    { mUpdateMask |= MASK_RSSI;  mRSSI = val;      }
-    inline u16  getRSSI(void)                       { return mRSSI;     }
+    inline void setRSSI(u8 rssi)                    { mUpdateMask |= MASK_RSSI;  mRSSI = rssi;     }
+    inline u8   getRSSI(void)                       { return mRSSI;     }
 
-    inline void setBaroAlt(u16 val)                 { mUpdateMask |= MASK_BARO_ALT; mBaroAlt = val;}
+    inline void setBaroAlt(u16 cm)                  { mUpdateMask |= MASK_BARO_ALT; mBaroAlt = cm;}
 
     inline struct gps *getGPS(void)                 { return &mGPS;     }
     inline void  setLat(s32 lat)                    { mGPS.latitude = lat;              mUpdateMask |= MASK_GPS; }
@@ -71,10 +71,10 @@ private:
     u16         mVolt[3];
     u16         mTemp[4];
     u16         mRPM[3];
-    u16         mRSSI;
     u16         mBaroAlt;
     u16         mBattCap;
     struct gps  mGPS;
+    u8          mRSSI;
 
     u8          mTeleBuf[30];
 };
