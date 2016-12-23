@@ -31,7 +31,8 @@ public:
     inline void setVolt(u8 idx, u16 mV)             { mUpdateMask |= MASK_VOLT; mVolt[idx] = mV;   }
     inline u16  getVolt(u8 idx)                     { return mVolt[idx];                           }
 
-    inline void setTemp(u8 idx, u16 val)            { mUpdateMask |= MASK_TEMP;  mTemp[idx] = val; }
+    inline void setTempF(u8 idx, u16 f)             { mUpdateMask |= MASK_TEMP;  mTemp[idx] = f; }
+    inline void setTempC(u8 idx, u16 c)             { mUpdateMask |= MASK_TEMP;  mTemp[idx] = (c * 9) / 5 + 32; }
     inline u16  getTemp(u8 idx)                     { return mTemp[idx];}
 
     inline void setRPM(u8 idx, u16 val)             { mUpdateMask |= MASK_RPM;   mRPM[idx] = val;  }
@@ -41,6 +42,7 @@ public:
     inline u8   getRSSI(void)                       { return mRSSI;     }
 
     inline void setBaroAlt(u16 cm)                  { mUpdateMask |= MASK_BARO_ALT; mBaroAlt = cm;}
+    inline u16  getBaroAlt(u16 cm)                  { return mBaroAlt; }
 
     inline struct gps *getGPS(void)                 { return &mGPS;     }
     inline void  setLat(s32 lat)                    { mGPS.latitude = lat;              mUpdateMask |= MASK_GPS; }

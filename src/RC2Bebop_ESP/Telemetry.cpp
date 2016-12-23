@@ -32,27 +32,6 @@ Telemetry::~Telemetry()
 
 }
 
-
-/*
-#define FRSKY_START_STOP    0x7e
-#define FRSKY_BYTESTUFF     0x7d
-#define FRSKY_STUFF_MASK    0x20
-
-void Telemetry::frameFRSky(u8 *buf, u8 size)
-{
-    Serial3.write(FRSKY_START_STOP);
-    for (u8 i = 0; i < size; i++) {
-        if (buf[i] == FRSKY_START_STOP || buf[i] == FRSKY_BYTESTUFF) {
-            Serial3.write(FRSKY_BYTESTUFF);
-            buf[i] ^= FRSKY_BYTESTUFF;
-        }
-        Serial3.write(buf[i]);
-    }
-    Serial3.write(FRSKY_START_STOP);
-}
-*/
-
-
 //0[00] 18(0x12)
 //1[01] 00
 //2[02] Altitude MSB (Hex)
@@ -71,15 +50,19 @@ void Telemetry::frameFRSky(u8 *buf, u8 size)
 //15[0F] Unknown
 u8 Telemetry::buildAltInfo(u8 *buf)
 {
+    static u16 max_alt = 0;
     u16 alt = mBaroAlt / 10;
+
+    if (alt > max_alt)
+        max_alt = alt;
 
     memset(buf, 0, 18);
     buf[0] = 0x12;
     buf[1] = 0x00;
     buf[2] = (alt >> 8) & 0xff;
     buf[3] = alt & 0xff;
-    buf[4] = 0x00;
-    buf[5] = 0x96;
+    buf[4] = (max_alt >> 8) & 0xff;
+    buf[5] = max_alt & 0xff;
 
     return 18;
 }
@@ -113,14 +96,14 @@ u8 Telemetry::buildPowerInfo(u8 *buf)
     buf[0] = 0x0A;
     buf[1] = 0x00;
 
-    mV     = getVolt(idx) / 10;
-    buf[2] = (mV >> 8) & 0xff;  // 0.01V
+    mV     = getVolt(idx) / 10;         // 0.01V
+    buf[2] = (mV >> 8) & 0xff;
     buf[3] = mV & 0xff;
 
     mV     = getVolt(idx + 1) / 10;
     buf[4] = (mV >> 8) & 0xff;
     buf[5] = mV & 0xff;
-    buf[6] = 0x08;                      // cap 1mAh, ex:2200mAh
+    buf[6] = 0x08;                      // ex:2200mAh
     buf[7] = 0x98;
     buf[8] = 0x08;
     buf[9] = 0x98;
@@ -155,21 +138,23 @@ u8 Telemetry::buildGPSInfo(u8 *buf)
     buf[2] = (getGPS()->altitude >> 8) & 0xff;
     buf[3] = getGPS()->altitude & 0xff;
 
-    buf[7] =  getGPS()->latitude / 3600000;     // hour
-    getGPS()->latitude -= (buf[7] * 3600000);
-    buf[6] =  getGPS()->latitude / 60000;       // min
-    getGPS()->latitude -= (buf[6] * 60000);
-    buf[5] =  getGPS()->latitude / 6;           // sec
-    getGPS()->latitude -= (buf[5] * 6);
-    buf[4] =  getGPS()->latitude;               // 1/100
+    s32 lat = getGPS()->latitude;
+    buf[7] =  lat / 3600000;     // hour
+    lat    =  lat % 3600000;
+    buf[6] =  lat / 60000;       // min
+    lat    =  lat % 60000;
+    buf[5] =  lat / 6;           // sec
+    lat    =  lat % 6;
+    buf[4] =  lat;               // 1/100
 
-    buf[11] =  getGPS()->longitude / 3600000;   // hour
-    getGPS()->longitude -= (buf[7] * 3600000);
-    buf[10] =  getGPS()->longitude / 60000;     // min
-    getGPS()->longitude -= (buf[6] * 60000);
-    buf[9] =  getGPS()->longitude / 6;          // sec
-    getGPS()->longitude -= (buf[5] * 6);
-    buf[8] =  getGPS()->longitude;              // 1/100
+    s32 lon = getGPS()->longitude;
+    buf[11] = lon / 3600000;   // hour
+    lon     = lon % 3600000;
+    buf[10] = lon / 60000;     // min
+    lon     = lon % 60000;
+    buf[9]  = lon / 6;          // sec
+    lon     = lon % 6;
+    buf[8] =  lon;              // 1/100
 
     buf[12] = getGPS()->heading & 0xff;
     buf[13] = (getGPS()->heading >> 8) & 0xff;
@@ -209,8 +194,11 @@ u8 Telemetry::buildTMInfo(u8 *buf)
     buf[1] = 0x00;
     buf[2] = (getRPM(0) >> 8) & 0xff;
     buf[3] = getRPM(0)  & 0xff;
-    buf[4] = (getVolt(idx) >> 8) & 0xff;  // 0.01V
-    buf[5] = getVolt(idx) & 0xff;
+
+    u16 volt = getVolt(idx) / 10;
+    buf[4] = (volt >> 8) & 0xff;
+    buf[5] = volt & 0xff;
+
     buf[6] = (getTemp(idx) >> 8) & 0xff;
     buf[7] = getTemp(idx) & 0xff;
 
@@ -218,14 +206,164 @@ u8 Telemetry::buildTMInfo(u8 *buf)
 }
 
 
+//0[00] 23(0x17)
+//1[01] 00
+//2[02] Speed LSB (Decimal)
+//3[03] Speed MSB (Decimal) Divide by 10 for Knots. Multiply by 0.185 for Kph and 0.115 for Mph
+//4[04] UTC Time LSB (Decimal) 1/100th sec. (HH:MM:SS.SS)
+//5[05] UTC Time (Decimal) = SS
+//6[06] UTC Time (Decimal) = MM
+//7[07] UTC Time MSB (Decimal) = HH
+//8[08] Number of Sats (Decimal)
+//9[09] Altitude in 1000m (Decimal) Altitude = Value * 10000 + Altitude(0x16) (in 0.1m)
+//10[0A]-15[0F] Unused (But contains Data left in buffer)
+
+
+//Data type = 0x03 High Current Sensor
+//0 [00] 03
+//1 [01] 00
+//2 [02] MSB (Hex) //16bit signed integer
+//3 [03] LSB (Hex) //In 0.196791A
+//4 [04] 00
+//5 [05] 00
+//6 [06] 00
+//7 [07] 00
+//8 [08] 00
+//9 [09] 00
+//10 [0A] 00
+//11 [0B] 00
+//12 [0C] 00
+//13 [0D] 00
+//14 [0E] 00
+//15 [0F] 00
+
+
+//Data type = 0x0A PowerBox Sensor
+//0 [00] 0x0A
+//1 [01] 00
+//2 [02] V1 MSB (Hex)
+//3 [03] V1 LSB (Hex) //In 0.01V
+//4 [04] V2 MSB (Hex)
+//5 [05] V2 LSB (Hex) //In 0.01V
+//6 [06] Cap1 MSB (Hex)
+//7 [07] Cap1 LSB (Hex) //In 1mAh
+//8 [08] Cap2 MSB (Hex)
+//9 [09] Cap2 LSB (Hex) //In 1mAh
+//10 [0A] 00
+//11 [0B] 00
+//12 [0C] 00
+//13 [0D] 00
+//14 [0E] 00
+//15 [0F] Alarm // The fist bit is alarm V1, the second V2, the third Capacity 1, the 4th capacity 2.
+
+
+//Data type = 0x11 AirSpeed Sensor
+//0[00] 17(0x11)
+//1[01] 00
+//2[02] Speed MSB (Hex)
+//3[03] Speed LSB (Hex) //In 1 km/h
+//4[04] Unknown
+//5[05] Unknown
+//6[06] Unknown
+//7[07] Unknown
+//8[08] Unknown
+//9[09] Unknown
+//10[0A] Unknown
+//11[0B] Unknown
+//12[0C] Unknown
+//13[0D] Unknown
+//14[0E] Unknown
+//15[0F] Unknown
+
+
+//Data type = 0x14 Gforce Sensor
+//0[00] 20(0x14)
+//1[01] 00
+//2[02] x MSB (Hex, signed integer)
+//3[03] x LSB (Hex, signed integer) //In 0.01g
+//4[04] y MSB (Hex, signed integer)
+//5[05] y LSB (Hex, signed integer) //In 0.01g
+//6[06] z MSB (Hex, signed integer)
+//7[07] z LSB (Hex, signed integer) //In 0.01g
+//8[08] x max MSB (Hex, signed integer)
+//9[09] x max LSB (Hex, signed integer) //In 0.01g
+//10[0A] y max MSB (Hex, signed integer)
+//11[0B] y max LSB (Hex, signed integer) //In 0.01g
+//12[0C] z max MSB (Hex, signed integer)
+//13[0D] z max LSB (Hex, signed integer) //In 0.01g
+//14[0E] z min MSB (Hex, signed integer)
+//15[0F] z min LSB (Hex, signed integer) //In 0.01g
+
+
+//Data type = 0x15 JetCat Sensor
+//0[00] 21(0x15)
+//1[01] 00
+//2[02] Status
+//3[03] Throttle //up to 159% (the upper nibble is 0-f, the lower nibble 0-9)
+//4[04] Pack_Volt LSB (Decimal)
+//5[05] Pack_Volt MSB (Decimal) //In 0.01V
+//6[06] Pump_Volt LSB (Decimal)
+//7[07] Pump_Volt MSB (Decimal) //In 0.01V
+//8[08] RPM LSB (Decimal) //Up to 999999rpm
+//9[09] RPM Mid (Decimal)
+//10[0A] RPM MSB (Decimal)
+//11[0B] 00
+//12[0C] TempEGT (Decimal) LSB
+//13[0D] TempEGT (Decimal) MSB //used only lover nibble, up to 999°C
+//14[0E] Off_Condition
+//15[0F] 00
+
+
+//Data type = 7F{TM1000} or FF{TM1100}
+//0[00] 7F or FF
+//1[01] 00
+//2[02] A MSB (Hex)
+//3[03] A LSB (Hex)
+//4[04] B MSB (Hex)
+//5[05] B LSB (Hex)
+//6[06] L MSB (Hex)
+//7[07] L LSB (Hex) //0xFFFF = NC (not connected)
+//8[08] R MSB (Hex)
+//9[09] R LSB (Hex) //0xFFFF = NC (not connected)
+//10[0A] Frame loss MSB (Hex)
+//11[0B] Frame loss LSB (Hex)
+//12[0C] Holds MSB (Hex)
+//13[0D] Holds LSB (Hex)
+//14[0E] Receiver Volts MSB (Hex) //In 0.01V
+//15[0F] Receiver Volts LSB (Hex)
+
+//answer from TX module:
+//header: 0xAA
+//0x00 - no telemetry
+//0x01 - telemetry packet present and telemetry block (TM1000, TM1100)
+//answer in 16 bytes body from
+//http://www.deviationtx.com/forum/protocol-development/1192-dsm-telemetry-support?start=60
+//..
+//0x1F - this byte also used as RSSI signal for receiving telemetry
+//block. readed from CYRF in a TX module
+//0x80 - BIND packet answer, receiver return his type
+//aa bb cc dd ee......
+//aa ORTX_USExxxx from main.h
+//bb
+//cc - max channel, AR6115e work only in 6 ch mode (0xA2)
+//0xFF - sysinfo
+//aa.aa.aa.aa - CYRF manufacturer ID
+//bb.bb - firmware version
+//	if(ortxRxBuffer[1] == 0x80){//BIND packet answer
+//		ortxMode = ortxRxBuffer[2];
+//		if(ortxMode & ORTX_USE_DSMX)
+//			g_model.ppmNCH = DSM2_DSMX;
+//		else
+//			g_model.ppmNCH = DSM2only;
+//		//ortxTxBuffer[3];//power
+//		g_model.unused1[0] = ortxRxBuffer[4];//channels number
+
 void Telemetry::frameDSM(u8 rssi, u8 *buf, u8 size)
 {
-#if 1
     Serial1.write(0xAA);
     Serial1.write(rssi);
     for (u8 i = 0; i < size; i++)
         Serial1.write(buf[i]);
-#endif
 }
 
 void Telemetry::update(void)
@@ -234,9 +372,9 @@ void Telemetry::update(void)
     u8 rssi;
 
     if (isMasked(MASK_RSSI)) {
-        rssi = constrain(getRSSI(), 0, 0x1f);
+        rssi = getRSSI() >> 3;
     } else {
-        rssi = 0x1f;
+        rssi = 0x1;
     }
 
     if (isMasked(MASK_VOLT)) {
@@ -246,15 +384,22 @@ void Telemetry::update(void)
         clearMask(MASK_VOLT);
     }
 
-    if (isMasked(MASK_TEMP | MASK_RPM)) {
-        LOG("RPM  - R1:%d, R2:%d, R3:%d\n", mRPM[0], mRPM[1], mRPM[2]);
+    if (isMasked(MASK_TEMP)) {
         LOG("TEMP - T1:%d, T2:%d, T3:%d, T4:%d\n", mTemp[0], mTemp[1], mTemp[2], mTemp[3]);
         size = buildTMInfo(mTeleBuf);
         frameDSM(rssi, mTeleBuf, size);
-        clearMask(MASK_TEMP | MASK_RPM);
+        clearMask(MASK_TEMP);
+    }
+
+    if (isMasked(MASK_RPM)) {
+        LOG("RPM  - R1:%d, R2:%d, R3:%d\n", mRPM[0], mRPM[1], mRPM[2]);
+        size = buildTMInfo(mTeleBuf);
+        frameDSM(rssi, mTeleBuf, size);
+        clearMask(MASK_RPM);
     }
 
     if (isMasked(MASK_BARO_ALT)) {
+        LOG("ALT  - %d\n", mBaroAlt);
         size = buildAltInfo(mTeleBuf);
         frameDSM(rssi, mTeleBuf, size);
         clearMask(MASK_BARO_ALT);

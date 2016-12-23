@@ -44,6 +44,7 @@ static u32 mFlag = 0;
 static s16 alt  = 0;
 static s16 rssi = 256;
 static s16 mv = 0;
+static s16 temp = 0;
 
 static void handleKey(void)
 {
@@ -115,7 +116,7 @@ static void handleKey(void)
                 break;
 #endif
 
-            case 't':
+            case 'v':
                 mv += 100;
                 LOG("volt:%d mV\n", mv);
                 mTM.setVolt(0, mv);
@@ -128,9 +129,15 @@ static void handleKey(void)
                 break;
 
             case 'r':
-                rssi ++;
+                rssi++;
                 LOG("rssi:%d\n", rssi);
                 mTM.setRSSI(rssi);
+                break;
+
+            case 't':
+                temp++;
+                LOG("temp:%d\n", temp);
+                mTM.setTempC(0, temp);
                 break;
         }
     }

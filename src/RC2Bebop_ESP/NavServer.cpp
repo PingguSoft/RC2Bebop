@@ -147,7 +147,7 @@ int NavServer::parseFrame(u8 *data, u32 size, u8 *dataAck)
             } else if (cmdID == PACK_CMD(PROJECT_ARDRONE3, ARDRONE3_CLASS_CAMERASTATE, 0)) {
                 LOG(">> CAM          : %d %d\n", ba.get8(), ba.get8());
             } else if (GET_PRJ_CLS(cmdID) == PACK_PRJ_CLS(PROJECT_ARDRONE3, ARDRONE3_CLASS_PILOTINGSTATE)) {
-                switch(cmd) {
+                switch (cmd) {
                     case 4:
                         LOG(">> POS          : %s %s %s\n", Utils::dtoa(buf, ba.getdouble()),
                             Utils::dtoa(buf, ba.getdouble()), Utils::dtoa(buf, ba.getdouble()));
